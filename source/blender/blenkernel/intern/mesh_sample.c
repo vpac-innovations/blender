@@ -79,6 +79,8 @@ void BKE_mesh_sample_eval(DerivedMesh *dm, const MSurfaceSample *sample, float l
 		normal_short_to_float_v3(vnor, v4->no);
 		madd_v3_v3fl(nor, vnor, sample->orig_weights[3]);
 	}
+	
+	normalize_v3(nor);
 }
 
 
