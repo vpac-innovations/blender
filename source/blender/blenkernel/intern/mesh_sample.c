@@ -41,7 +41,7 @@
 
 /* Evaluate */
 
-void BKE_mesh_sample_eval(DerivedMesh *dm, const MSurfaceSample *sample, float loc[3], float nor[3])
+bool BKE_mesh_sample_eval(DerivedMesh *dm, const MSurfaceSample *sample, float loc[3], float nor[3])
 {
 	MVert *mverts = dm->getVertArray(dm);
 	MVert *v1, *v2, *v3, *v4;
@@ -54,7 +54,7 @@ void BKE_mesh_sample_eval(DerivedMesh *dm, const MSurfaceSample *sample, float l
 	zero_v3(nor);
 	
 	if (sample->orig_face >= totfaces)
-		return;
+		return false;
 	
 	v1 = &mverts[mface->v1];
 	v2 = &mverts[mface->v2];
@@ -81,6 +81,8 @@ void BKE_mesh_sample_eval(DerivedMesh *dm, const MSurfaceSample *sample, float l
 	}
 	
 	normalize_v3(nor);
+	
+	return true;
 }
 
 
