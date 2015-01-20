@@ -180,6 +180,10 @@ static void seq_proxy_build_job(const bContext *C)
 	LinkData *link;
 	Sequence *seq;
 
+	if (ed == NULL) {
+		return;
+	}
+
 	wm_job = WM_jobs_get(CTX_wm_manager(C), CTX_wm_window(C), sa, "Building Proxies",
 	                     WM_JOB_PROGRESS, WM_JOB_TYPE_SEQ_BUILD_PROXY);
 
@@ -494,6 +498,13 @@ bool ED_space_sequencer_check_show_imbuf(SpaceSeq *sseq)
 	return (ELEM(sseq->view, SEQ_VIEW_PREVIEW, SEQ_VIEW_SEQUENCE_PREVIEW) &&
 	        ELEM(sseq->mainb, SEQ_DRAW_SEQUENCE, SEQ_DRAW_IMG_IMBUF));
 }
+
+bool ED_space_sequencer_check_show_strip(SpaceSeq *sseq)
+{
+	return (ELEM(sseq->view, SEQ_VIEW_SEQUENCE, SEQ_VIEW_SEQUENCE_PREVIEW) &&
+	        ELEM(sseq->mainb, SEQ_DRAW_SEQUENCE, SEQ_DRAW_IMG_IMBUF));
+}
+
 
 int seq_effect_find_selected(Scene *scene, Sequence *activeseq, int type, Sequence **selseq1, Sequence **selseq2, Sequence **selseq3, const char **error_str)
 {
@@ -1130,11 +1141,20 @@ int sequencer_strip_has_path_poll(bContext *C)
 	return (((ed = BKE_sequencer_editing_get(CTX_data_scene(C), false)) != NULL) && ((seq = ed->act_seq) != NULL) && (SEQ_HAS_PATH(seq)));
 }
 
-int sequencer_view_poll(bContext *C)
+int sequencer_view_preview_poll(bContext *C)
 {
 	SpaceSeq *sseq = CTX_wm_space_seq(C);
 	Editing *ed = BKE_sequencer_editing_get(CTX_data_scene(C), false);
 	if (ed && sseq && (sseq->mainb == SEQ_DRAW_IMG_IMBUF))
+		return 1;
+
+	return 0;
+}
+
+int sequencer_view_strips_poll(bContext *C)
+{
+	SpaceSeq *sseq = CTX_wm_space_seq(C);
+	if (sseq && ED_space_sequencer_check_show_strip(sseq))
 		return 1;
 
 	return 0;
@@ -3315,7 +3335,7 @@ void SEQUENCER_OT_view_ghost_border(wmOperatorType *ot)
 	ot->invoke = WM_border_select_invoke;
 	ot->exec = view_ghost_border_exec;
 	ot->modal = WM_border_select_modal;
-	ot->poll = sequencer_view_poll;
+	ot->poll = sequencer_view_preview_poll;
 	ot->cancel = WM_border_select_cancel;
 
 	/* flags */
@@ -3326,9 +3346,39 @@ void SEQUENCER_OT_view_ghost_border(wmOperatorType *ot)
 }
 
 /* rebuild_proxy operator */
-static int sequencer_rebuild_proxy_exec(bContext *C, wmOperator *UNUSED(op))
+
+static int sequencer_rebuild_proxy_invoke(bContext *C, wmOperator *UNUSED(op),
+                                          const wmEvent *UNUSED(event))
 {
 	seq_proxy_build_job(C);
+
+	return OPERATOR_FINISHED;
+}
+
+static int sequencer_rebuild_proxy_exec(bContext *C, wmOperator *UNUSED(op))
+{
+	Main *bmain = CTX_data_main(C);
+	Scene *scene = CTX_data_scene(C);
+	Editing *ed = BKE_sequencer_editing_get(scene, false);
+	Sequence *seq;
+
+	if (ed == NULL) {
+		return OPERATOR_CANCELLED;
+	}
+
+	SEQP_BEGIN(ed, seq)
+	{
+		if ((seq->flag & SELECT)) {
+			struct SeqIndexBuildContext *context;
+			short stop = 0, do_update;
+			float progress;
+			context = BKE_sequencer_proxy_rebuild_context(bmain, scene, seq);
+			BKE_sequencer_proxy_rebuild(context, &stop, &do_update, &progress);
+			BKE_sequencer_proxy_rebuild_finish(context, 0);
+			BKE_sequencer_free_imbuf(scene, &ed->seqbase, false);
+		}
+	}
+	SEQ_END
 
 	return OPERATOR_FINISHED;
 }
@@ -3341,8 +3391,8 @@ void SEQUENCER_OT_rebuild_proxy(wmOperatorType *ot)
 	ot->description = "Rebuild all selected proxies and timecode indices using the job system";
 	
 	/* api callbacks */
+	ot->invoke = sequencer_rebuild_proxy_invoke;
 	ot->exec = sequencer_rebuild_proxy_exec;
-	ot->poll = ED_operator_sequencer_active;
 	
 	/* flags */
 	ot->flag = OPTYPE_REGISTER;
@@ -3584,7 +3634,7 @@ void SEQUENCER_OT_change_path(struct wmOperatorType *ot)
 	/* flags */
 	ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
 
-	WM_operator_properties_filesel(ot, FOLDERFILE | IMAGEFILE | MOVIEFILE, FILE_SPECIAL, FILE_OPENFILE,
+	WM_operator_properties_filesel(ot, FILE_TYPE_FOLDER | FILE_TYPE_IMAGE | FILE_TYPE_MOVIE, FILE_SPECIAL, FILE_OPENFILE,
 	                               WM_FILESEL_DIRECTORY | WM_FILESEL_RELPATH | WM_FILESEL_FILEPATH | WM_FILESEL_FILES,
 	                               FILE_DEFAULTDISPLAY);
 }

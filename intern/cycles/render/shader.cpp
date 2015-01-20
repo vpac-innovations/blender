@@ -11,7 +11,7 @@
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
- * limitations under the License
+ * limitations under the License.
  */
 
 #include "background.h"
@@ -21,6 +21,7 @@
 #include "light.h"
 #include "mesh.h"
 #include "nodes.h"
+#include "object.h"
 #include "osl.h"
 #include "scene.h"
 #include "shader.h"
@@ -194,6 +195,7 @@ void Shader::tag_update(Scene *scene)
 	 * e.g. surface attributes when there is only a volume shader. this could
 	 * be more fine grained but it's better than nothing */
 	OutputNode *output = graph->output();
+	bool prev_has_volume = has_volume;
 	has_surface = has_surface || output->input("Surface")->link;
 	has_volume = has_volume || output->input("Volume")->link;
 	has_displacement = has_displacement || output->input("Displacement")->link;
@@ -214,6 +216,11 @@ void Shader::tag_update(Scene *scene)
 	if(attributes.modified(prev_attributes)) {
 		need_update_attributes = true;
 		scene->mesh_manager->need_update = true;
+	}
+
+	if(has_volume != prev_has_volume) {
+		scene->mesh_manager->need_flags_update = true;
+		scene->object_manager->need_flags_update = true;
 	}
 }
 

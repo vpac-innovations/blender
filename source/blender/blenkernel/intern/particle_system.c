@@ -472,13 +472,24 @@ void psys_tasks_create(ParticleThreadContext *ctx, int totpart, ParticleTask **r
 
 void psys_tasks_free(ParticleTask *tasks, int numtasks)
 {
-	ParticleThreadContext *ctx;
 	int i;
 	
 	if (numtasks == 0)
 		return;
 	
-	ctx = tasks[0].ctx;
+	/* threads */
+	for (i = 0; i < numtasks; ++i) {
+		if (tasks[i].rng)
+			BLI_rng_free(tasks[i].rng);
+		if (tasks[i].rng_path)
+			BLI_rng_free(tasks[i].rng_path);
+	}
+
+	MEM_freeN(tasks);
+}
+
+void psys_thread_context_free(ParticleThreadContext *ctx)
+{
 	/* path caching */
 	if (ctx->vg_length)
 		MEM_freeN(ctx->vg_length);
@@ -507,16 +518,6 @@ void psys_tasks_free(ParticleTask *tasks, int numtasks)
 	if (ctx->seams) MEM_freeN(ctx->seams);
 	//if (ctx->vertpart) MEM_freeN(ctx->vertpart);
 	BLI_kdtree_free(ctx->tree);
-
-	/* threads */
-	for (i = 0; i < numtasks; ++i) {
-		if (tasks[i].rng)
-			BLI_rng_free(tasks[i].rng);
-		if (tasks[i].rng_path)
-			BLI_rng_free(tasks[i].rng_path);
-	}
-
-	MEM_freeN(tasks);
 }
 
 static void initialize_particle_texture(ParticleSimulationData *sim, ParticleData *pa, int p)
@@ -649,7 +650,7 @@ static void get_angular_velocity_vector(short avemode, ParticleKey *state, float
 	}
 }
 
-void psys_get_birth_coordinates(ParticleSimulationData *sim, ParticleData *pa, ParticleKey *state, float dtime, float cfra)
+void psys_get_birth_coords(ParticleSimulationData *sim, ParticleData *pa, ParticleKey *state, float dtime, float cfra)
 {
 	Object *ob = sim->ob;
 	ParticleSystem *psys = sim->psys;
@@ -981,7 +982,7 @@ void reset_particle(ParticleSimulationData *sim, ParticleData *pa, float dtime, 
 		psys->flag |= PSYS_OB_ANIM_RESTORE;
 	}
 
-	psys_get_birth_coordinates(sim, pa, &pa->state, dtime, cfra);
+	psys_get_birth_coords(sim, pa, &pa->state, dtime, cfra);
 
 	/* Initialize particle settings which depends on texture.
 	 *
@@ -2089,7 +2090,7 @@ static void basic_integrate(ParticleSimulationData *sim, int p, float dfra, floa
 	tkey.time=pa->state.time;
 
 	if (part->type != PART_HAIR) {
-		if (do_guides(sim->psys->effectors, &tkey, p, time)) {
+		if (do_guides(sim->psys->part, sim->psys->effectors, &tkey, p, time)) {
 			copy_v3_v3(pa->state.co,tkey.co);
 			/* guides don't produce valid velocity */
 			sub_v3_v3v3(pa->state.vel, tkey.co, pa->prev_state.co);

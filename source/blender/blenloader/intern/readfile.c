@@ -2945,7 +2945,6 @@ static void lib_link_pose(FileData *fd, Main *bmain, Object *ob, bPose *pose)
 		pchan->bone = BKE_armature_find_bone_name(arm, pchan->name);
 		
 		pchan->custom = newlibadr_us(fd, arm->id.lib, pchan->custom);
-		pchan->custom_fmap = newlibadr_us(fd, arm->id.lib, pchan->custom_fmap);
 		if (pchan->bone == NULL)
 			rebuild= 1;
 		else if (ob->id.lib==NULL && arm->id.lib) {
@@ -3130,14 +3129,14 @@ static void lib_link_key(FileData *fd, Main *main)
 static void switch_endian_keyblock(Key *key, KeyBlock *kb)
 {
 	int elemsize, a, b;
-	const char *data, *poin, *cp;
+	char *data;
 	
 	elemsize = key->elemsize;
 	data = kb->data;
 	
 	for (a = 0; a < kb->totelem; a++) {
-		cp = key->elemstr;
-		poin = data;
+		const char *cp = key->elemstr;
+		char *poin = data;
 		
 		while (cp[0]) {  /* cp[0] == amount */
 			switch (cp[1]) {  /* cp[1] = type */
@@ -3821,6 +3820,13 @@ static void direct_link_particlesettings(FileData *fd, ParticleSettings *part)
 	direct_link_animdata(fd, part->adt);
 	direct_link_partdeflect(part->pd);
 	direct_link_partdeflect(part->pd2);
+
+	part->clumpcurve = newdataadr(fd, part->clumpcurve);
+	if (part->clumpcurve)
+		direct_link_curvemapping(fd, part->clumpcurve);
+	part->roughcurve = newdataadr(fd, part->roughcurve);
+	if (part->roughcurve)
+		direct_link_curvemapping(fd, part->roughcurve);
 
 	part->effector_weights = newdataadr(fd, part->effector_weights);
 	if (!part->effector_weights)
@@ -4930,9 +4936,14 @@ static void direct_link_object(FileData *fd, Object *ob)
 	/* loading saved files with editmode enabled works, but for undo we like
 	 * to stay in object mode during undo presses so keep editmode disabled.
 	 *
-	 * Also when linking in a file don't allow editmode: [#34776] */
+	 * Also when linking in a file don't allow edit and pose modes.
+	 * See [#34776, #42780] for more information.
+	 */
 	if (fd->memfile || (ob->id.flag & (LIB_EXTERN | LIB_INDIRECT))) {
 		ob->mode &= ~(OB_MODE_EDIT | OB_MODE_PARTICLE_EDIT);
+		if (!fd->memfile) {
+			ob->mode &= ~OB_MODE_POSE;
+		}
 	}
 	
 	ob->adt = newdataadr(fd, ob->adt);
@@ -7601,9 +7612,7 @@ static BHead *read_global(BlendFileData *bfd, FileData *fd, BHead *bhead)
 	bfd->main->build_commit_timestamp = fg->build_commit_timestamp;
 	BLI_strncpy(bfd->main->build_hash, fg->build_hash, sizeof(bfd->main->build_hash));
 	
-	bfd->winpos = fg->winpos;
 	bfd->fileflags = fg->fileflags;
-	bfd->displaymode = fg->displaymode;
 	bfd->globalf = fg->globalf;
 	BLI_strncpy(bfd->filename, fg->filename, sizeof(bfd->filename));
 	

@@ -659,7 +659,7 @@ void ui_draw_preview_item(struct uiFontStyle *fstyle, rcti *rect, const char *na
 void uiStyleInit(void);
 
 /* interface_icons.c */
-int ui_id_icon_get(struct bContext *C, struct ID *id, const bool big);
+int ui_id_icon_get(const struct bContext *C, struct ID *id, const bool big);
 
 /* resources.c */
 void init_userdef_do_versions(void);
@@ -694,6 +694,7 @@ void ui_but_anim_autokey(struct bContext *C, uiBut *but, struct Scene *scene, fl
 /* interface_eyedropper.c */
 void UI_OT_eyedropper_color(struct wmOperatorType *ot);
 void UI_OT_eyedropper_id(struct wmOperatorType *ot);
+void UI_OT_eyedropper_depth(struct wmOperatorType *ot);
 
 
 /* interface_generic_widgets.c */

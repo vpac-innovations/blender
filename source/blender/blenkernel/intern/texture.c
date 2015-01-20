@@ -745,6 +745,7 @@ void default_mtex(MTex *mtex)
 	mtex->lengthfac = 1.0f;
 	mtex->clumpfac = 1.0f;
 	mtex->kinkfac = 1.0f;
+	mtex->kinkampfac = 1.0f;
 	mtex->roughfac = 1.0f;
 	mtex->padensfac = 1.0f;
 	mtex->lifefac = 1.0f;
@@ -755,6 +756,8 @@ void default_mtex(MTex *mtex)
 	mtex->fieldfac = 1.0f;
 	mtex->normapspace = MTEX_NSPACE_TANGENT;
 	mtex->brush_map_mode = MTEX_MAP_MODE_TILED;
+	mtex->random_angle = 2.0f * M_PI;
+	mtex->brush_angle_mode = 0;
 }
 
 
@@ -842,6 +845,10 @@ Tex *BKE_texture_copy(Tex *tex)
 		texn->nodetree = ntreeCopyTree(tex->nodetree);
 	}
 	
+	if (tex->id.lib) {
+		BKE_id_lib_local_paths(G.main, tex->id.lib, &texn->id);
+	}
+
 	return texn;
 }
 

@@ -87,6 +87,7 @@
 #include "GPU_draw.h"
 #include "GPU_extensions.h"
 #include "GPU_select.h"
+#include "GPU_buffers.h"
 
 #include "ED_mesh.h"
 #include "ED_particle.h"
@@ -2952,21 +2953,23 @@ static void draw_em_fancy_edges(BMEditMesh *em, Scene *scene, View3D *v3d,
 			if (!sel_only) wireCol[3] = 255;
 		}
 
-		if (ts->selectmode == SCE_SELECT_FACE) {
-			draw_dm_edges_sel(em, cageDM, wireCol, selCol, actCol, eed_act);
-		}
-		else if ((me->drawflag & ME_DRAWEDGES) || (ts->selectmode & SCE_SELECT_EDGE)) {
+		if ((me->drawflag & ME_DRAWEDGES) || (ts->selectmode & SCE_SELECT_EDGE)) {
 			if (cageDM->drawMappedEdgesInterp &&
 			    ((ts->selectmode & SCE_SELECT_VERTEX) || (me->drawflag & ME_DRAWEIGHT)))
 			{
-				glShadeModel(GL_SMOOTH);
 				if (draw_dm_edges_weight_check(me, v3d)) {
+					glShadeModel(GL_SMOOTH);
 					draw_dm_edges_weight_interp(em, cageDM, ts->weightuser);
+					glShadeModel(GL_FLAT);
+				}
+				else if (ts->selectmode == SCE_SELECT_FACE) {
+					draw_dm_edges_sel(em, cageDM, wireCol, selCol, actCol, eed_act);
 				}
 				else {
+					glShadeModel(GL_SMOOTH);
 					draw_dm_edges_sel_interp(em, cageDM, wireCol, selCol);
+					glShadeModel(GL_FLAT);
 				}
-				glShadeModel(GL_FLAT);
 			}
 			else {
 				draw_dm_edges_sel(em, cageDM, wireCol, selCol, actCol, eed_act);
@@ -4010,7 +4013,7 @@ static bool draw_mesh_object(Scene *scene, ARegion *ar, View3D *v3d, RegionView3
 			}
 
 			draw_mesh_fancy(scene, ar, v3d, rv3d, base, dt, ob_wire_col, dflag);
-
+			
 			GPU_end_object_materials();
 			
 			if (me->totvert == 0) retval = true;
@@ -5142,7 +5145,7 @@ static void draw_new_particle_system(Scene *scene, View3D *v3d, RegionView3D *rv
 		cache = psys->pathcache;
 		for (a = 0, pa = psys->particles; a < totpart; a++, pa++) {
 			path = cache[a];
-			if (path->steps > 0) {
+			if (path->segments > 0) {
 				glVertexPointer(3, GL_FLOAT, sizeof(ParticleCacheKey), path->co);
 
 				if (1) { //ob_dt > OB_WIRE) {
@@ -5154,7 +5157,7 @@ static void draw_new_particle_system(Scene *scene, View3D *v3d, RegionView3D *rv
 					}
 				}
 
-				glDrawArrays(GL_LINE_STRIP, 0, path->steps + 1);
+				glDrawArrays(GL_LINE_STRIP, 0, path->segments + 1);
 			}
 		}
 
@@ -5302,7 +5305,7 @@ static void draw_new_particle_system(Scene *scene, View3D *v3d, RegionView3D *rv
 				}
 			}
 
-			glDrawArrays(GL_LINE_STRIP, 0, path->steps + 1);
+			glDrawArrays(GL_LINE_STRIP, 0, path->segments + 1);
 		}
 
 
@@ -5454,7 +5457,7 @@ static void draw_ptcache_edit(Scene *scene, View3D *v3d, PTCacheEdit *edit)
 	PTCacheEditKey *key;
 	ParticleEditSettings *pset = PE_settings(scene);
 	int i, k, totpoint = edit->totpoint, timed = pset->flag & PE_FADE_TIME ? pset->fade_frames : 0;
-	int steps = 1;
+	int totkeys = 1;
 	float sel_col[3];
 	float nosel_col[3];
 	float *pathcol = NULL, *pcol;
@@ -5473,10 +5476,10 @@ static void draw_ptcache_edit(Scene *scene, View3D *v3d, PTCacheEdit *edit)
 	UI_GetThemeColor3fv(TH_VERTEX, nosel_col);
 
 	/* draw paths */
-	steps = (*edit->pathcache)->steps + 1;
+	totkeys = (*edit->pathcache)->segments + 1;
 
 	glEnable(GL_BLEND);
-	pathcol = MEM_callocN(steps * 4 * sizeof(float), "particle path color data");
+	pathcol = MEM_callocN(totkeys * 4 * sizeof(float), "particle path color data");
 
 	glEnableClientState(GL_VERTEX_ARRAY);
 	glEnableClientState(GL_COLOR_ARRAY);
@@ -5496,7 +5499,7 @@ static void draw_ptcache_edit(Scene *scene, View3D *v3d, PTCacheEdit *edit)
 		glVertexPointer(3, GL_FLOAT, sizeof(ParticleCacheKey), path->co);
 
 		if (point->flag & PEP_HIDE) {
-			for (k = 0, pcol = pathcol; k < steps; k++, pcol += 4) {
+			for (k = 0, pcol = pathcol; k < totkeys; k++, pcol += 4) {
 				copy_v3_v3(pcol, path->col);
 				pcol[3] = 0.25f;
 			}
@@ -5504,7 +5507,7 @@ static void draw_ptcache_edit(Scene *scene, View3D *v3d, PTCacheEdit *edit)
 			glColorPointer(4, GL_FLOAT, 4 * sizeof(float), pathcol);
 		}
 		else if (timed) {
-			for (k = 0, pcol = pathcol, pkey = path; k < steps; k++, pkey++, pcol += 4) {
+			for (k = 0, pcol = pathcol, pkey = path; k < totkeys; k++, pkey++, pcol += 4) {
 				copy_v3_v3(pcol, pkey->col);
 				pcol[3] = 1.0f - fabsf((float)(CFRA) -pkey->time) / (float)pset->fade_frames;
 			}
@@ -5514,7 +5517,7 @@ static void draw_ptcache_edit(Scene *scene, View3D *v3d, PTCacheEdit *edit)
 		else
 			glColorPointer(3, GL_FLOAT, sizeof(ParticleCacheKey), path->col);
 
-		glDrawArrays(GL_LINE_STRIP, 0, path->steps + 1);
+		glDrawArrays(GL_LINE_STRIP, 0, path->segments + 1);
 	}
 
 	if (pathcol) { MEM_freeN(pathcol); pathcol = pcol = NULL; }
@@ -8189,7 +8192,7 @@ static void bbs_mesh_solid_EM(BMEditMesh *em, Scene *scene, View3D *v3d,
 	cpack(0);
 
 	if (use_faceselect) {
-		dm->drawMappedFaces(dm, bbs_mesh_solid__setSolidDrawOptions, GPU_enable_material, NULL, em->bm, 0);
+		dm->drawMappedFaces(dm, bbs_mesh_solid__setSolidDrawOptions, NULL, NULL, em->bm, 0);
 
 		if (check_ob_drawface_dot(scene, v3d, ob->dt)) {
 			glPointSize(UI_GetThemeValuef(TH_FACEDOT_SIZE));
@@ -8201,7 +8204,7 @@ static void bbs_mesh_solid_EM(BMEditMesh *em, Scene *scene, View3D *v3d,
 
 	}
 	else {
-		dm->drawMappedFaces(dm, bbs_mesh_mask__setSolidDrawOptions, GPU_enable_material, NULL, em->bm, 0);
+		dm->drawMappedFaces(dm, bbs_mesh_mask__setSolidDrawOptions, NULL, NULL, em->bm, 0);
 	}
 }
 
@@ -8262,9 +8265,9 @@ static void bbs_mesh_solid_faces(Scene *scene, Object *ob)
 	DM_update_materials(dm, ob);
 
 	if ((me->editflag & ME_EDIT_PAINT_FACE_SEL))
-		dm->drawMappedFaces(dm, bbs_mesh_solid_hide__setDrawOpts, GPU_enable_material, NULL, me, 0);
+		dm->drawMappedFaces(dm, bbs_mesh_solid_hide__setDrawOpts, NULL, NULL, me, 0);
 	else
-		dm->drawMappedFaces(dm, bbs_mesh_solid__setDrawOpts, GPU_enable_material, NULL, me, 0);
+		dm->drawMappedFaces(dm, bbs_mesh_solid__setDrawOpts, NULL, NULL, me, 0);
 
 	dm->release(dm);
 }
@@ -8393,6 +8396,48 @@ static void draw_object_mesh_instance(Scene *scene, View3D *v3d, RegionView3D *r
 	if (edm) edm->release(edm);
 	if (dm) dm->release(dm);
 }
+
+void ED_draw_object_facemap(Scene *scene, struct Object *ob, int facemap)
+{
+	DerivedMesh *dm = NULL;
+	
+	dm = mesh_get_derived_final(scene, ob, CD_MASK_BAREMESH);
+	if (!dm || !CustomData_has_layer(&dm->polyData, CD_FACEMAP))
+		return;
+	
+	DM_update_materials(dm, ob);
+
+	glFrontFace((ob->transflag & OB_NEG_SCALE) ? GL_CW : GL_CCW);
+	
+	/* add polygon offset so we draw above the original surface */
+	glPolygonOffset(1.0, 1.0);
+
+	dm->totfmaps = BLI_listbase_count(&ob->fmaps);
+	
+	GPU_facemap_setup(dm);
+
+	glColor4f(0.7, 1.0, 1.0, 0.5);
+	
+	glPushAttrib(GL_ENABLE_BIT);
+	glEnable(GL_BLEND);
+	glDisable(GL_LIGHTING);
+
+	if (dm->drawObject->facemapindices) {
+		if (dm->drawObject->facemapindices->use_vbo)
+			glDrawElements(GL_TRIANGLES, dm->drawObject->facemap_count[facemap], GL_UNSIGNED_INT, 
+			               (int *)NULL + dm->drawObject->facemap_start[facemap]);
+		else
+			glDrawElements(GL_TRIANGLES, dm->drawObject->facemap_count[facemap], GL_UNSIGNED_INT,
+			               (int *)dm->drawObject->facemapindices->pointer + dm->drawObject->facemap_start[facemap]);
+	}
+	glPopAttrib();
+
+	GPU_buffer_unbind();
+
+	glPolygonOffset(0.0, 0.0);
+	dm->release(dm);
+}
+
 
 void draw_object_instance(Scene *scene, View3D *v3d, RegionView3D *rv3d, Object *ob, const char dt, int outline)
 {

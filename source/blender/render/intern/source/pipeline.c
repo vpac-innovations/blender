@@ -2379,6 +2379,7 @@ static void do_render_seq(Render *re)
 	RenderResult *rr; /* don't assign re->result here as it might change during give_ibuf_seq */
 	int cfra = re->r.cfra;
 	SeqRenderData context;
+	int re_x, re_y;
 
 	re->i.cfra = cfra;
 
@@ -2392,13 +2393,18 @@ static void do_render_seq(Render *re)
 	if ((re->r.mode & R_BORDER) && (re->r.mode & R_CROP) == 0) {
 		/* if border rendering is used and cropping is disabled, final buffer should
 		 * be as large as the whole frame */
-		context = BKE_sequencer_new_render_data(re->eval_ctx, re->main, re->scene,
-		                                        re->winx, re->winy, 100);
+		re_x = re->winx;
+		re_y = re->winy;
 	}
 	else {
-		context = BKE_sequencer_new_render_data(re->eval_ctx, re->main, re->scene,
-		                                        re->result->rectx, re->result->recty, 100);
+		re_x = re->result->rectx;
+		re_y = re->result->recty;
 	}
+
+	BKE_sequencer_new_render_data(
+	        re->eval_ctx, re->main, re->scene,
+	        re_x, re_y, 100,
+	        &context);
 
 	out = BKE_sequencer_give_ibuf(&context, cfra, 0);
 
@@ -2534,6 +2540,8 @@ static bool check_valid_compositing_camera(Scene *scene, Object *camera_override
 
 static int check_valid_camera(Scene *scene, Object *camera_override, ReportList *reports)
 {
+	const char *err_msg = "No camera found in scene \"%s\"";
+
 	if (camera_override == NULL && scene->camera == NULL)
 		scene->camera = BKE_scene_camera_find(scene);
 
@@ -2542,14 +2550,17 @@ static int check_valid_camera(Scene *scene, Object *camera_override, ReportList 
 			Sequence *seq = scene->ed->seqbase.first;
 
 			while (seq) {
-				if (seq->type == SEQ_TYPE_SCENE && seq->scene) {
+				if ((seq->type == SEQ_TYPE_SCENE) &&
+				    ((seq->flag & SEQ_SCENE_STRIPS) == 0) &&
+				    (seq->scene != NULL))
+				{
 					if (!seq->scene_camera) {
 						if (!seq->scene->camera && !BKE_scene_camera_find(seq->scene)) {
 							/* camera could be unneeded due to composite nodes */
 							Object *override = (seq->scene == scene) ? camera_override : NULL;
 
 							if (!check_valid_compositing_camera(seq->scene, override)) {
-								BKE_reportf(reports, RPT_ERROR, "No camera found in scene \"%s\"", seq->scene->id.name+2);
+								BKE_reportf(reports, RPT_ERROR, err_msg, seq->scene->id.name + 2);
 								return false;
 							}
 						}
@@ -2561,7 +2572,7 @@ static int check_valid_camera(Scene *scene, Object *camera_override, ReportList 
 		}
 	}
 	else if (!check_valid_compositing_camera(scene, camera_override)) {
-		BKE_report(reports, RPT_ERROR, "No camera found in scene");
+		BKE_reportf(reports, RPT_ERROR, err_msg, scene->id.name + 2);
 		return false;
 	}
 

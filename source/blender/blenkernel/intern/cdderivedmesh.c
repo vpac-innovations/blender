@@ -395,7 +395,7 @@ static void cdDM_drawEdges(DerivedMesh *dm, bool drawLooseEdges, bool drawAllEdg
 	MEdge *medge = cddm->medge;
 	int i;
 	int prevstart = 0;
-	int prevdraw = 1;
+	bool prevdraw = true;
 	bool draw = true;
 	
 	if (cddm->pbvh && cddm->pbvh_draw &&
@@ -417,14 +417,14 @@ static void cdDM_drawEdges(DerivedMesh *dm, bool drawLooseEdges, bool drawAllEdg
 			draw = false;
 		}
 		if (prevdraw != draw) {
-			if (prevdraw > 0 && (i - prevstart) > 0) {
+			if (prevdraw && (i - prevstart) > 0) {
 				GPU_buffer_draw_elements(dm->drawObject->edges, GL_LINES, prevstart * 2, (i - prevstart) * 2);
 			}
 			prevstart = i;
 		}
 		prevdraw = draw;
 	}
-	if (prevdraw > 0 && (i - prevstart) > 0) {
+	if (prevdraw && (i - prevstart) > 0) {
 		GPU_buffer_draw_elements(dm->drawObject->edges, GL_LINES, prevstart * 2, (i - prevstart) * 2);
 	}
 	GPU_buffer_unbind();
@@ -1052,7 +1052,7 @@ static void cdDM_drawMappedFacesGLSL(DerivedMesh *dm,
 	}
 	else {
 		GPUBuffer *buffer = NULL;
-		const char *varray = NULL;
+		char *varray = NULL;
 		int numdata = 0, elementsize = 0, offset;
 		int start = 0, numfaces = 0 /* , prevdraw = 0 */ /* UNUSED */, curface = 0;
 		int i;
@@ -2208,7 +2208,7 @@ void CDDM_calc_normals(DerivedMesh *dm)
 
 #endif
 
-void CDDM_calc_loop_normals(DerivedMesh *dm, const float split_angle)
+void CDDM_calc_loop_normals(DerivedMesh *dm, const bool use_split_normals, const float split_angle)
 {
 	MVert *mverts = dm->getVertArray(dm);
 	MEdge *medges = dm->getEdgeArray(dm);
@@ -2246,7 +2246,7 @@ void CDDM_calc_loop_normals(DerivedMesh *dm, const float split_angle)
 	dm->dirty &= ~DM_DIRTY_NORMALS;
 
 	BKE_mesh_normals_loop_split(mverts, numVerts, medges, numEdges, mloops, lnors, numLoops,
-	                            mpolys, pnors, numPolys, split_angle);
+	                            mpolys, pnors, numPolys, use_split_normals, split_angle);
 }
 
 

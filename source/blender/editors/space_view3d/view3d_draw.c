@@ -588,20 +588,26 @@ static void draw_view_axis(RegionView3D *rv3d, rcti *rect)
 	float ydisp = 0.0;          /* vertical displacement to allow obj info text */
 	int bright = - 20 * (10 - U.rvibright); /* axis alpha offset (rvibright has range 0-10) */
 	float vec[3];
-	char axis_text[2] = "x";
 	float dx, dy;
-	int i;
-	
+
+	int axis_order[3] = {0, 1, 2};
+	int axis_i;
+
 	startx += rect->xmin;
 	starty += rect->ymin;
-	
+
+	axis_sort_v3(rv3d->viewinv[2], axis_order);
+
 	/* thickness of lines is proportional to k */
 	glLineWidth(2);
 
 	glEnable(GL_BLEND);
 	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
-	for (i = 0; i < 3; i++) {
+	for (axis_i = 0; axis_i < 3; axis_i++) {
+		int i = axis_order[axis_i];
+		const char axis_text[2] = {'x' + i, '\0'};
+
 		zero_v3(vec);
 		vec[i] = 1.0f;
 		mul_qt_v3(rv3d->viewquat, vec);
@@ -617,8 +623,6 @@ static void draw_view_axis(RegionView3D *rv3d, rcti *rect)
 		if (fabsf(dx) > toll || fabsf(dy) > toll) {
 			BLF_draw_default_ascii(startx + dx + 2, starty + dy + ydisp + 2, 0.0f, axis_text, 1);
 		}
-
-		axis_text[0]++;
 
 		/* BLF_draw_default disables blending */
 		glEnable(GL_BLEND);
@@ -789,7 +793,16 @@ static const char *view3d_get_name(View3D *v3d, RegionView3D *rv3d)
 				if ((v3d->camera) && (v3d->camera->type == OB_CAMERA)) {
 					Camera *cam;
 					cam = v3d->camera->data;
-					name = (cam->type != CAM_ORTHO) ? IFACE_("Camera Persp") : IFACE_("Camera Ortho");
+					if (cam->type == CAM_PERSP) {
+						name = IFACE_("Camera Persp");
+					}
+					else if (cam->type == CAM_ORTHO) {
+						name = IFACE_("Camera Ortho");
+					}
+					else {
+						BLI_assert(cam->type == CAM_PANO);
+						name = IFACE_("Camera Pano");
+					}
 				}
 				else {
 					name = IFACE_("Object as Camera");
@@ -1059,14 +1072,13 @@ static void drawviewborder_triangle(float x1, float x2, float y1, float y2, cons
 
 static void drawviewborder(Scene *scene, ARegion *ar, View3D *v3d)
 {
-	float hmargin, vmargin;
 	float x1, x2, y1, y2;
 	float x1i, x2i, y1i, y2i;
 
 	rctf viewborder;
 	Camera *ca = NULL;
 	RegionView3D *rv3d = ar->regiondata;
-	
+
 	if (v3d->camera == NULL)
 		return;
 	if (v3d->camera->type == OB_CAMERA)
@@ -1218,17 +1230,20 @@ static void drawviewborder(Scene *scene, ARegion *ar, View3D *v3d)
 			drawviewborder_triangle(x1, x2, y1, y2, 1, 'B');
 		}
 
-		if (ca->flag & CAM_SHOWTITLESAFE) {
-			UI_ThemeColorBlendShade(TH_VIEW_OVERLAY, TH_BACK, 0.25, 0);
+		if (ca->flag & CAM_SHOW_SAFE_MARGINS) {
+			UI_draw_safe_areas(
+			        x1, x2, y1, y2,
+			        scene->safe_areas.title,
+			        scene->safe_areas.action);
 
-			hmargin = 0.1f  * (x2 - x1);
-			vmargin = 0.05f * (y2 - y1);
-			UI_draw_roundbox_gl_mode(GL_LINE_LOOP, x1 + hmargin, y1 + vmargin, x2 - hmargin, y2 - vmargin, 2.0f);
-
-			hmargin = 0.035f * (x2 - x1);
-			vmargin = 0.035f * (y2 - y1);
-			UI_draw_roundbox_gl_mode(GL_LINE_LOOP, x1 + hmargin, y1 + vmargin, x2 - hmargin, y2 - vmargin, 2.0f);
+			if (ca->flag & CAM_SHOW_SAFE_CENTER) {
+				UI_draw_safe_areas(
+				        x1, x2, y1, y2,
+				        scene->safe_areas.title_center,
+				        scene->safe_areas.action_center);
+			}
 		}
+
 		if (ca->flag & CAM_SHOWSENSOR) {
 			/* determine sensor fit, and get sensor x/y, for auto fit we
 			 * assume and square sensor and only use sensor_x */
@@ -1272,8 +1287,9 @@ static void drawviewborder(Scene *scene, ARegion *ar, View3D *v3d)
 	/* camera name - draw in highlighted text color */
 	if (ca && (ca->flag & CAM_SHOWNAME)) {
 		UI_ThemeColor(TH_TEXT_HI);
-		BLF_draw_default(x1i, y1i - 15, 0.0f, v3d->camera->id.name + 2, sizeof(v3d->camera->id.name) - 2);
-		UI_ThemeColor(TH_WIRE);
+		BLF_draw_default(
+		        x1i, y1i - (0.7f * U.widget_unit), 0.0f,
+		        v3d->camera->id.name + 2, sizeof(v3d->camera->id.name) - 2);
 	}
 }
 
@@ -2669,6 +2685,7 @@ static void view3d_draw_objects(
 		else {
 			if ((v3d->flag2 & V3D_RENDER_OVERRIDE) == 0) {
 				ED_region_pixelspace(ar);
+				*grid_unit = NULL;  /* drawgrid need this to detect/affect smallest valid unit... */
 				drawgrid(&scene->unit, ar, v3d, grid_unit);
 				/* XXX make function? replaces persp(1) */
 				glMatrixMode(GL_PROJECTION);
@@ -3018,6 +3035,7 @@ void ED_view3d_draw_offscreen(Scene *scene, View3D *v3d, ARegion *ar, int winx, 
                               float viewmat[4][4], float winmat[4][4],
                               bool do_bgpic, bool do_sky, GPUFX *fx, bool is_persp, GPUOffScreen *ofs, GPUFXOptions *fxoptions, int fxflags)
 {
+	struct bThemeState theme_state;
 	int bwinx, bwiny;
 	rcti brect;
 	bool do_compositing = false;
@@ -3037,7 +3055,7 @@ void ED_view3d_draw_offscreen(Scene *scene, View3D *v3d, ARegion *ar, int winx, 
 	ar->winrct.xmax = winx;
 	ar->winrct.ymax = winy;
 
-	/* set theme */
+	UI_Theme_Store(&theme_state);
 	UI_SetTheme(SPACE_VIEW3D, RGN_TYPE_WINDOW);
 
 	/* set flags */
@@ -3097,8 +3115,7 @@ void ED_view3d_draw_offscreen(Scene *scene, View3D *v3d, ARegion *ar, int winx, 
 
 	glPopMatrix();
 
-	/* XXX, without this the sequencer flickers with opengl draw enabled, need to find out why - campbell */
-	glColor4ub(255, 255, 255, 255);
+	UI_Theme_Restore(&theme_state);
 
 	G.f &= ~G_RENDER_OGL;
 }
@@ -3173,7 +3190,7 @@ ImBuf *ED_view3d_draw_offscreen_imbuf(Scene *scene, View3D *v3d, ARegion *ar, in
 	
 	if (ibuf->rect_float && ibuf->rect)
 		IMB_rect_from_float(ibuf);
-	
+
 	return ibuf;
 }
 
