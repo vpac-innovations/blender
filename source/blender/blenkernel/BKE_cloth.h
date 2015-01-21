@@ -181,7 +181,7 @@ typedef enum {
 typedef enum {
 	CLOTH_COLLSETTINGS_FLAG_ENABLED = ( 1 << 1 ), /* enables cloth - object collisions */
 	CLOTH_COLLSETTINGS_FLAG_SELF = ( 1 << 2 ), /* enables selfcollisions */
-	CLOTH_COLLSETTINGS_FLAG_POINTS = ( 1 << 3 ), /* enables point collisions (hair) */
+	CLOTH_COLLSETTINGS_FLAG_STRANDS = ( 1 << 3 ), /* enables strand collisions (hair) */
 } CLOTH_COLLISIONSETTINGS_FLAGS;
 
 /* Spring types as defined in the paper.*/
@@ -222,6 +222,21 @@ int cloth_points_objcollision(struct Object *ob, struct ClothModifierData *clmd,
 void cloth_find_point_contacts(struct Object *ob, struct ClothModifierData *clmd, float step, float dt,
                                ColliderContacts **r_collider_contacts, int *r_totcolliders);
 void cloth_free_contacts(ColliderContacts *collider_contacts, int totcolliders);
+
+
+/* Bullet collision */
+typedef struct CollisionContactPoint {
+	float point_world_a[3];
+	float point_world_b[3];
+	float normal_world_b[3];
+	float distance;
+	float friction, rolling_friction, restitution;
+	int part_id_a, part_id_b;
+	int index_a, index_b;
+	float lifetime;
+} CollisionContactPoint;
+
+void cloth_strands_find_contacts(struct Object *ob, struct ClothModifierData *clmd, struct CollisionContactPoint **r_contacts, int *r_numcontacts);
 
 ////////////////////////////////////////////////
 

@@ -860,8 +860,10 @@ int BPH_cloth_solve(Object *ob, float frame, ClothModifierData *clmd, ListBase *
 	unsigned int numverts = cloth->numverts;
 	float dt = clmd->sim_parms->timescale / clmd->sim_parms->stepsPerFrame;
 	Implicit_Data *id = cloth->implicit;
-	ColliderContacts *contacts = NULL;
-	int totcolliders = 0;
+//	ColliderContacts *contacts = NULL;
+//	int totcolliders = 0;
+	CollisionContactPoint *contacts = NULL;
+	int numcontacts = 0;
 	
 	BKE_sim_debug_data_clear_category("collision");
 	
@@ -899,13 +901,14 @@ int BPH_cloth_solve(Object *ob, float frame, ClothModifierData *clmd, ListBase *
 		
 		/* determine contact points */
 		if (clmd->coll_parms->flags & CLOTH_COLLSETTINGS_FLAG_ENABLED) {
-			if (clmd->coll_parms->flags & CLOTH_COLLSETTINGS_FLAG_POINTS) {
-				cloth_find_point_contacts(ob, clmd, 0.0f, tf, &contacts, &totcolliders);
+			if (clmd->coll_parms->flags & CLOTH_COLLSETTINGS_FLAG_STRANDS) {
+//				cloth_find_point_contacts(ob, clmd, 0.0f, tf, &contacts, &totcolliders);
+				cloth_strands_find_contacts(ob, clmd, &contacts, &numcontacts);
 			}
 		}
 		
 		/* setup vertex constraints for pinned vertices and contacts */
-		cloth_setup_constraints(clmd, contacts, totcolliders, dt);
+//		cloth_setup_constraints(clmd, contacts, totcolliders, dt);
 		
 		// damping velocity for artistic reasons
 		// this is a bad way to do it, should be removed imo - lukas_t
@@ -948,7 +951,10 @@ int BPH_cloth_solve(Object *ob, float frame, ClothModifierData *clmd, ListBase *
 		
 		/* free contact points */
 		if (contacts) {
-			cloth_free_contacts(contacts, totcolliders);
+//			cloth_free_contacts(contacts, totcolliders);
+			MEM_freeN(contacts);
+			contacts = NULL;
+			numcontacts = 0;
 		}
 		
 		step += dt;

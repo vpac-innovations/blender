@@ -3957,7 +3957,7 @@ static void direct_link_particlesystems(FileData *fd, ListBase *particles)
 					psys->clmd->sim_parms->presets = 0;
 			}
 			if (psys->clmd->coll_parms) {
-				psys->clmd->coll_parms->flags |= CLOTH_COLLSETTINGS_FLAG_POINTS;
+				psys->clmd->coll_parms->flags |= CLOTH_COLLSETTINGS_FLAG_STRANDS;
 			}
 			
 			psys->hair_in_dm = psys->hair_out_dm = NULL;
