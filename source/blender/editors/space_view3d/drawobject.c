@@ -48,6 +48,7 @@
 #include "BLI_string.h"
 #include "BLI_math.h"
 #include "BLI_memarena.h"
+#include "BLI_rand.h"
 
 #include "BKE_anim.h"  /* for the where_on_path function */
 #include "BKE_armature.h"
@@ -4480,6 +4481,378 @@ static bool drawDispList(Scene *scene, View3D *v3d, RegionView3D *rv3d, Base *ba
 }
 
 /* *********** drawing for particles ************* */
+
+static void draw_particle_hull_section(ParticleCacheKey *path, ParticleCacheKey *npath)
+{
+	int segments = max_ii(path->segments, npath->segments);
+	int k;
+	
+	for (k = 0; k < segments; ++k) {
+		int k0 = max_ii(k-1, 0);
+		int k1 = k;
+		int k2 = k+1;
+		int k3 = min_ii(k+2, path->segments);
+		int nk0 = max_ii(min_ii(k-1, npath->segments), 0);
+		int nk1 = min_ii(k, npath->segments);
+		int nk2 = min_ii(k+1, npath->segments);
+		int nk3 = min_ii(k+2, npath->segments);
+		float *co[2][4];
+		
+		float nor01[3], nor11[3], nor02[3], nor12[3];
+		
+		co[0][0] = path[k0].co;
+		co[0][1] = path[k1].co;
+		co[0][2] = path[k2].co;
+		co[0][3] = path[k3].co;
+		co[1][0] = npath[nk0].co;
+		co[1][1] = npath[nk1].co;
+		co[1][2] = npath[nk2].co;
+		co[1][3] = npath[nk3].co;
+		
+		normal_quad_v3(nor01, co[0][1], co[0][0], co[1][1], co[0][2]);
+		normal_quad_v3(nor02, co[0][2], co[0][1], co[1][2], co[0][3]);
+		normal_quad_v3(nor11, co[1][1], co[1][2], co[0][1], co[1][0]);
+		normal_quad_v3(nor12, co[1][2], co[1][3], co[0][2], co[1][1]);
+		
+		glNormal3fv(nor01);
+		glVertex3fv(path[k1].co);
+		glNormal3fv(nor11);
+		glVertex3fv(npath[nk1].co);
+		glNormal3fv(nor12);
+		glVertex3fv(npath[nk2].co);
+		glNormal3fv(nor02);
+		glVertex3fv(path[k2].co);
+	}
+}
+
+static void draw_particle_hull_cap(ParticleCacheKey *a0, ParticleCacheKey *a1, ParticleCacheKey *a2, ParticleCacheKey *a3,
+                                   ParticleCacheKey *b0, ParticleCacheKey *b1, ParticleCacheKey *b2, ParticleCacheKey *b3)
+{
+	float *ca[4], *cb[4];
+	
+	float na[4][3], nb[4][3];
+	
+	if (a1 == b1) {
+		ca[1] = cb[1] = a1[a1->segments].co;
+		ca[2] = a2[a2->segments].co;
+		cb[2] = b2[b2->segments].co;
+		ca[3] = a3[a3->segments].co;
+		cb[3] = b3[b3->segments].co;
+		
+		normal_tri_v3(na[1], ca[1], cb[2], ca[2]);
+		normal_quad_v3(na[2], ca[2], ca[1], cb[2], ca[3]);
+		normal_quad_v3(nb[2], cb[2], cb[3], ca[2], cb[1]);
+		
+		glNormal3fv(na[2]);
+		glVertex3fv(ca[2]);
+		
+		glNormal3fv(na[1]);
+		glVertex3fv(ca[1]);
+		
+		glNormal3fv(nb[2]);
+		glVertex3fv(cb[2]);
+	}
+	else if (a2 == b2) {
+		ca[0] = a0[a0->segments].co;
+		cb[0] = b0[b0->segments].co;
+		ca[1] = a1[a1->segments].co;
+		cb[1] = b1[b1->segments].co;
+		ca[2] = cb[2] = a2[a2->segments].co;
+		
+		normal_quad_v3(na[1], ca[1], ca[0], cb[1], ca[2]);
+		normal_quad_v3(nb[1], cb[1], cb[2], ca[1], cb[0]);
+		normal_tri_v3(na[2], ca[2], ca[1], cb[1]);
+		
+		glNormal3fv(na[1]);
+		glVertex3fv(ca[1]);
+		
+		glNormal3fv(nb[1]);
+		glVertex3fv(cb[1]);
+		
+		glNormal3fv(nb[2]);
+		glVertex3fv(cb[2]);
+	}
+	else {
+		ca[0] = a0[a0->segments].co;
+		cb[0] = b0[b0->segments].co;
+		ca[1] = a1[a1->segments].co;
+		cb[1] = b1[b1->segments].co;
+		ca[2] = a2[a2->segments].co;
+		cb[2] = b2[b2->segments].co;
+		ca[3] = a3[a3->segments].co;
+		cb[3] = b3[b3->segments].co;
+		
+		normal_quad_v3(na[1], ca[1], ca[0], cb[1], ca[2]);
+		normal_quad_v3(na[2], ca[2], ca[1], cb[2], ca[3]);
+		normal_quad_v3(nb[1], cb[1], cb[2], ca[1], cb[0]);
+		normal_quad_v3(nb[2], cb[2], cb[3], ca[2], cb[1]);
+		
+		glNormal3fv(na[1]);
+		glVertex3fv(ca[1]);
+		
+		glNormal3fv(nb[1]);
+		glVertex3fv(cb[1]);
+		
+		glNormal3fv(nb[2]);
+		glVertex3fv(cb[2]);
+		
+		glNormal3fv(na[2]);
+		glVertex3fv(ca[2]);
+		
+		glNormal3fv(na[1]);
+		glVertex3fv(ca[1]);
+		
+		glNormal3fv(nb[2]);
+		glVertex3fv(cb[2]);
+	}
+}
+
+BLI_INLINE bool particle_path_valid(ParticleCacheKey **cache, int p)
+{
+	return (cache[p]->segments >= 0 && cache[p]->hull_parent >= 0);
+}
+
+BLI_INLINE int particle_path_next(ParticleCacheKey **cache, int pmax, int p)
+{
+	do {
+		++p;
+		if (p >= pmax)
+			break;
+		if (particle_path_valid(cache, p))
+			break;
+	} while (true);
+	
+	return p;
+}
+
+BLI_INLINE int particle_path_prev(ParticleCacheKey **cache, int pmin, int p)
+{
+	do {
+		--p;
+		if (p < pmin)
+			break;
+		if (particle_path_valid(cache, p))
+			break;
+	} while (true);
+	
+	return p;
+}
+
+BLI_INLINE unsigned int hash_int_2d(unsigned int kx, unsigned int ky)
+{
+#define rot(x,k) (((x)<<(k)) | ((x)>>(32-(k))))
+
+	unsigned int a, b, c;
+
+	a = b = c = 0xdeadbeef + (2 << 2) + 13;
+	a += kx;
+	b += ky;
+
+	c ^= b; c -= rot(b,14);
+	a ^= c; a -= rot(c,11);
+	b ^= a; b -= rot(a,25);
+	c ^= b; c -= rot(b,16);
+	a ^= c; a -= rot(c,4);
+	b ^= a; b -= rot(a,14);
+	c ^= b; c -= rot(b,24);
+
+	return c;
+
+#undef rot
+}
+
+BLI_INLINE unsigned int hash_int(unsigned int k)
+{
+	return hash_int_2d(k, 0);
+}
+
+static void particle_path_color(int index, float col[3])
+{
+	unsigned seed = hash_int(index);
+	
+	BLI_srandom(seed);
+	hsv_to_rgb(BLI_frand(), 1.0f, 1.0f, col+0, col+1, col+2);
+}
+
+static void draw_particle_hair_hull(Scene *UNUSED(scene), View3D *v3d, RegionView3D *rv3d,
+                                    Base *base, ParticleSystem *psys,
+                                    const char UNUSED(ob_dt), const short dflag)
+{
+	Object *ob = base->object;
+	ParticleSettings *part = psys->part;
+	Material *ma = give_current_material(ob, part->omat);
+	unsigned char tcol[4] = {0, 0, 0, 255};
+	GLint polygonmode[2];
+	int totchild;
+	
+	bool draw_constcolor = dflag & DRAW_CONSTCOLOR;
+	
+	ParticleCacheKey **cache;
+	
+	if (part->type == PART_HAIR && !psys->childcache)
+		totchild = 0;
+	else
+		totchild = psys->totchild * part->disp / 100;
+	
+	if (v3d->zbuf)
+		glDepthMask(true);
+	
+	glGetIntegerv(GL_POLYGON_MODE, polygonmode);
+	
+	cache = psys->childcache;
+	
+	switch (part->draw_col) {
+		case PART_DRAW_COL_NONE:
+			draw_constcolor = true;
+			break;
+		case PART_DRAW_COL_MAT:
+			if (ma)
+				rgb_float_to_uchar(tcol, &(ma->r));
+			else
+				tcol[0] = tcol[1] = tcol[2] = 1.0f;
+			break;
+		case PART_DRAW_COL_VEL:
+			tcol[0] = tcol[1] = tcol[2] = 1.0f;
+			break;
+		case PART_DRAW_COL_ACC:
+			tcol[0] = tcol[1] = tcol[2] = 1.0f;
+			break;
+		case PART_DRAW_COL_PARENT:
+			/* handled per child group */
+			break;
+		default:
+			BLI_assert(0); /* should never happen */
+			break;
+	}
+	
+	if (!draw_constcolor) {
+		glColor3ubv(tcol);
+	}
+	
+	/* draw child particles */
+	{
+		int pstart;
+		float col[3];
+		
+		glEnable(GL_LIGHTING);
+		glEnable(GL_COLOR_MATERIAL);
+		glColorMaterial(GL_FRONT_AND_BACK, GL_DIFFUSE);
+		glShadeModel(GL_SMOOTH);
+		
+		glBegin(GL_QUADS);
+		pstart = particle_path_next(cache, totchild, -1);
+		while (pstart < totchild) {
+			int p = pstart;
+			int np = particle_path_next(cache, totchild, p);
+			
+			if (part->draw_col == PART_DRAW_COL_PARENT) {
+				particle_path_color(pstart, col);
+				rgb_float_to_uchar(tcol, col);
+				glColor3ubv(tcol);
+			}
+			
+			while (np < totchild && cache[np]->hull_parent == cache[pstart]->hull_parent) {
+				draw_particle_hull_section(cache[p], cache[np]);
+				
+				p = np;
+				np = particle_path_next(cache, totchild, np);
+			}
+			if (p > pstart + 1)
+				draw_particle_hull_section(cache[p], cache[pstart]);
+			
+			pstart = np;
+		}
+		glEnd();
+		
+		glBegin(GL_TRIANGLES);
+		pstart = particle_path_next(cache, totchild, -1);
+		while (pstart < totchild) {
+			int groupend;
+			
+			if (part->draw_col == PART_DRAW_COL_PARENT) {
+				particle_path_color(pstart, col);
+				rgb_float_to_uchar(tcol, col);
+				glColor3ubv(tcol);
+			}
+			
+			{
+				int p = particle_path_next(cache, totchild, pstart);
+				while (p < totchild && cache[p]->hull_parent == cache[pstart]->hull_parent) {
+					p = particle_path_next(cache, totchild, p);
+				}
+				groupend = p;
+			}
+			
+			{
+				int a[4], b[4];
+				
+				#define NEXT \
+				a[3] = a[2]; \
+				b[3] = b[2]; \
+				a[2] = a[1]; \
+				b[2] = b[1]; \
+				a[1] = a[0]; \
+				b[1] = b[0]; \
+				a[0] = particle_path_next(cache, groupend, a[0]); \
+				b[0] = particle_path_prev(cache, pstart, b[0]);
+				
+				a[3] = pstart - 1;
+				b[3] = particle_path_prev(cache, pstart, groupend) + 1;
+				a[2] = particle_path_next(cache, groupend, a[3]);
+				b[2] = particle_path_prev(cache, pstart, b[3]);
+				a[1] = particle_path_next(cache, groupend, a[2]);
+				b[1] = particle_path_prev(cache, pstart, b[2]);
+				a[0] = particle_path_next(cache, groupend, a[1]);
+				b[0] = particle_path_prev(cache, pstart, b[1]);
+				
+				/* first element */
+				if (a[1] <= b[1]) {
+					if (a[0] <= b[0])
+						draw_particle_hull_cap(cache[a[0]], cache[a[1]], cache[a[2]], cache[a[2]],
+						                       cache[b[0]], cache[b[1]], cache[b[2]], cache[b[2]]);
+					else
+						draw_particle_hull_cap(cache[a[1]], cache[a[1]], cache[a[2]], cache[a[2]],
+						                       cache[b[1]], cache[b[1]], cache[b[2]], cache[b[2]]);
+				}
+				NEXT
+				
+				while (true) {
+					if (a[1] <= b[1]) {
+						if (a[0] <= b[0])
+							draw_particle_hull_cap(cache[a[0]], cache[a[1]], cache[a[2]], cache[a[3]],
+							                       cache[b[0]], cache[b[1]], cache[b[2]], cache[b[3]]);
+						else
+							draw_particle_hull_cap(cache[a[1]], cache[a[1]], cache[a[2]], cache[a[3]],
+							                       cache[b[1]], cache[b[1]], cache[b[2]], cache[b[3]]);
+					}
+					else
+						break;
+					
+					NEXT
+				}
+				
+				#undef NEXT
+			}
+			
+			pstart = groupend;
+		}
+		glEnd();
+		
+		glDisable(GL_COLOR_MATERIAL);
+		glDisable(GL_LIGHTING);
+	}
+	
+	glPolygonMode(GL_FRONT, polygonmode[0]);
+	glPolygonMode(GL_BACK, polygonmode[1]);
+	
+	if ((base->flag & OB_FROMDUPLI) && (ob->flag & OB_FROMGROUP)) {
+		glLoadMatrixf(rv3d->viewmat);
+	}
+	
+#undef FOREACH_PATH_PAIR_BEGIN
+#undef FOREACH_PATH_PAIR_END
+}
+
 static void draw_particle_arrays(int draw_as, int totpoint, int ob_dt, int select)
 {
 	/* draw created data arrays */
@@ -4504,6 +4877,7 @@ static void draw_particle_arrays(int draw_as, int totpoint, int ob_dt, int selec
 			break;
 	}
 }
+
 static void draw_particle(ParticleKey *state, int draw_as, short draw, float pixsize,
                           float imat[4][4], const float draw_line[2], ParticleBillboardData *bb, ParticleDrawData *pdd)
 {
@@ -4654,6 +5028,7 @@ static void draw_particle(ParticleKey *state, int draw_as, short draw, float pix
 		}
 	}
 }
+
 static void draw_particle_data(ParticleSystem *psys, RegionView3D *rv3d,
                                ParticleKey *state, int draw_as,
                                float imat[4][4], ParticleBillboardData *bb, ParticleDrawData *pdd,
@@ -4735,14 +5110,15 @@ static void draw_new_particle_system(Scene *scene, View3D *v3d, RegionView3D *rv
 	/* don't draw normal paths in edit mode */
 	if (psys_in_edit_mode(scene, psys) && (pset->flag & PE_DRAW_PART) == 0)
 		return;
-
-	if (part->draw_as == PART_DRAW_REND)
-		draw_as = part->ren_as;
-	else
-		draw_as = part->draw_as;
-
-	if (draw_as == PART_DRAW_NOT)
+	
+	draw_as = part->draw_as == PART_DRAW_REND ? part->ren_as : part->draw_as;
+	if (draw_as == PART_DRAW_NOT) {
 		return;
+	}
+	else if (draw_as == PART_DRAW_HULL) {
+		draw_particle_hair_hull(scene, v3d, rv3d, base, psys, ob_dt, dflag);
+		return;
+	}
 
 /* 2. */
 	sim.scene = scene;
@@ -4986,6 +5362,9 @@ static void draw_new_particle_system(Scene *scene, View3D *v3d, RegionView3D *rv
 								break;
 							case PART_DRAW_COL_ACC:
 								intensity = len_v3v3(pa->state.vel, pa->prev_state.vel) / ((pa->state.time - pa->prev_state.time) * part->color_vec_max);
+								break;
+							case PART_DRAW_COL_PARENT:
+								intensity = 1.0f;
 								break;
 							default:
 								intensity = 1.0f; /* should never happen */

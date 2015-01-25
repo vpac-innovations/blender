@@ -131,7 +131,7 @@ typedef struct ParticleCacheKey {
 	float rot[4];
 	float col[3];
 	float time;
-	int segments;
+	int segments, hull_parent;
 } ParticleCacheKey;
 
 typedef struct ParticleThreadContext {
