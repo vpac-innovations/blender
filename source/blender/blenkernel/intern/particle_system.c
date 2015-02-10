@@ -95,6 +95,8 @@
 
 #include "RE_shader_ext.h"
 
+#include "BPH_classical_sph.h"
+
 /* fluid sim particle import */
 #ifdef WITH_MOD_FLUID
 #include "DNA_object_fluidsim.h"
@@ -1511,27 +1513,6 @@ static EdgeHash *sph_springhash_build(ParticleSystem *psys)
 	return springhash;
 }
 
-#define SPH_NEIGHBORS 512
-typedef struct SPHNeighbor {
-	ParticleSystem *psys;
-	int index;
-} SPHNeighbor;
-
-typedef struct SPHRangeData {
-	SPHNeighbor neighbors[SPH_NEIGHBORS];
-	int tot_neighbors;
-
-	float* data;
-
-	ParticleSystem *npsys;
-	ParticleData *pa;
-
-	float h;
-	float mass;
-	float massfac;
-	int use_size;
-} SPHRangeData;
-
 static void sph_evaluate_func(BVHTree *tree, ParticleSystem **psys, float co[3], SPHRangeData *pfr, float interaction_radius, BVHTree_RangeQuery callback)
 {
 	int i;
@@ -1739,184 +1720,7 @@ static void sph_force_cb(void *sphdata_v, ParticleKey *state, float *force, floa
 		sph_particle_courant(sphdata, &pfr);
 	sphdata->pass++;
 }
-
-static void sphclassical_density_accum_cb(void *userdata, int index, float UNUSED(squared_dist))
-{
-	SPHRangeData *pfr = (SPHRangeData *)userdata;
-	ParticleData *npa = pfr->npsys->particles + index;
-	float q;
-	float qfac = 21.0f / (256.f * (float)M_PI);
-	float rij, rij_h;
-	float vec[3];
-
-	/* Exclude particles that are more than 2h away. Can't use squared_dist here
-	 * because it is not accurate enough. Use current state, i.e. the output of
-	 * basic_integrate() - z0r */
-	sub_v3_v3v3(vec, npa->state.co, pfr->pa->state.co);
-	rij = len_v3(vec);
-	rij_h = rij / pfr->h;
-	if (rij_h > 2.0f)
-		return;
-
-	/* Smoothing factor. Utilise the Wendland kernel. gnuplot:
-	 *     q1(x) = (2.0 - x)**4 * ( 1.0 + 2.0 * x)
-	 *     plot [0:2] q1(x) */
-	q  = qfac / pow3f(pfr->h) * pow4f(2.0f - rij_h) * ( 1.0f + 2.0f * rij_h);
-	q *= pfr->npsys->part->mass;
-
-	if (pfr->use_size)
-		q *= pfr->pa->size;
-
-	pfr->data[0] += q;
-	pfr->data[1] += q / npa->sphdensity;
-}
-
-static void sphclassical_neighbour_accum_cb(void *userdata, int index, float UNUSED(squared_dist))
-{
-	SPHRangeData *pfr = (SPHRangeData *)userdata;
-	ParticleData *npa = pfr->npsys->particles + index;
-	float rij, rij_h;
-	float vec[3];
-
-	if (pfr->tot_neighbors >= SPH_NEIGHBORS)
-		return;
-
-	/* Exclude particles that are more than 2h away. Can't use squared_dist here
-	 * because it is not accurate enough. Use current state, i.e. the output of
-	 * basic_integrate() - z0r */
-	sub_v3_v3v3(vec, npa->state.co, pfr->pa->state.co);
-	rij = len_v3(vec);
-	rij_h = rij / pfr->h;
-	if (rij_h > 2.0f)
-		return;
-
-	pfr->neighbors[pfr->tot_neighbors].index = index;
-	pfr->neighbors[pfr->tot_neighbors].psys = pfr->npsys;
-	pfr->tot_neighbors++;
-}
-static void sphclassical_force_cb(void *sphdata_v, ParticleKey *state, float *force, float *UNUSED(impulse))
-{
-	SPHData *sphdata = (SPHData *)sphdata_v;
-	ParticleSystem **psys = sphdata->psys;
-	ParticleData *pa = sphdata->pa;
-	SPHFluidSettings *fluid = psys[0]->part->fluid;
-	SPHRangeData pfr;
-	SPHNeighbor *pfn;
-	float *gravity = sphdata->gravity;
-
-	float dq, u, rij, dv[3];
-	float pressure, npressure;
-
-	float visc = fluid->viscosity_omega;
-
-	float interaction_radius;
-	float h, hinv;
-	/* 4.77 is an experimentally determined density factor */
-	float rest_density = fluid->rest_density * (fluid->flag & SPH_FAC_DENSITY ? 4.77f : 1.0f);
-
-	// Use speed of sound squared
-	float stiffness = pow2f(fluid->stiffness_k);
-
-	ParticleData *npa;
-	float vec[3];
-	float co[3];
-	float pressureTerm;
-
-	int i;
-
-	float qfac2 = 42.0f / (256.0f * (float)M_PI);
-	float rij_h;
-
-	/* 4.0 here is to be consistent with previous formulation/interface */
-	interaction_radius = fluid->radius * (fluid->flag & SPH_FAC_RADIUS ? 4.0f * pa->size : 1.0f);
-	h = interaction_radius * sphdata->hfac;
-	hinv = 1.0f / h;
-
-	pfr.h = h;
-	pfr.pa = pa;
-
-	sph_evaluate_func(NULL, psys, state->co, &pfr, interaction_radius, sphclassical_neighbour_accum_cb);
-	pressure =  stiffness * (pow7f(pa->sphdensity / rest_density) - 1.0f);
-
-	/* multiply by mass so that we return a force, not accel */
-	qfac2 *= sphdata->mass / pow3f(pfr.h);
-
-	pfn = pfr.neighbors;
-	for (i = 0; i < pfr.tot_neighbors; i++, pfn++) {
-		npa = pfn->psys->particles + pfn->index;
-		if (npa == pa) {
-			/* we do not contribute to ourselves */
-			continue;
-		}
-
-		/* Find vector to neighbor. Exclude particles that are more than 2h
-		 * away. Can't use current state here because it may have changed on
-		 * another thread - so do own mini integration. Unlike basic_integrate,
-		 * SPH integration depends on neighboring particles. - z0r */
-		madd_v3_v3v3fl(co, npa->prev_state.co, npa->prev_state.vel, state->time);
-		sub_v3_v3v3(vec, co, state->co);
-		rij = normalize_v3(vec);
-		rij_h = rij / pfr.h;
-		if (rij_h > 2.0f)
-			continue;
-
-		npressure = stiffness * (pow7f(npa->sphdensity / rest_density) - 1.0f);
-
-		/* First derivative of smoothing factor. Utilise the Wendland kernel.
-		 * gnuplot:
-		 *     q2(x) = 2.0 * (2.0 - x)**4 - 4.0 * (2.0 - x)**3 * (1.0 + 2.0 * x)
-		 *     plot [0:2] q2(x)
-		 * Particles > 2h away are excluded above. */
-		dq = qfac2 * (2.0f * pow4f(2.0f - rij_h) - 4.0f * pow3f(2.0f - rij_h) * (1.0f + 2.0f * rij_h)  );
-
-		if (pfn->psys->part->flag & PART_SIZEMASS)
-			dq *= npa->size;
-
-		pressureTerm = pressure / pow2f(pa->sphdensity) + npressure / pow2f(npa->sphdensity);
-
-		/* Note that 'minus' is removed, because vec = vecBA, not vecAB.
-		 * This applies to the viscosity calculation below, too. */
-		madd_v3_v3fl(force, vec, pressureTerm * dq);
-
-		/* Viscosity */
-		if (visc > 0.0f) {
-			sub_v3_v3v3(dv, npa->prev_state.vel, pa->prev_state.vel);
-			u = dot_v3v3(vec, dv);
-			/* Apply parameters */
-			u *= -dq * hinv * visc / (0.5f * npa->sphdensity + 0.5f * pa->sphdensity);
-			madd_v3_v3fl(force, vec, u);
-		}
-	}
-
-	/* Artificial buoyancy force in negative gravity direction  */
-	if (fluid->buoyancy > 0.f && gravity)
-		madd_v3_v3fl(force, gravity, fluid->buoyancy * (pa->sphdensity - rest_density));
-
-	if (sphdata->pass == 0 && psys[0]->part->time_flag & PART_TIME_AUTOSF)
-		sph_particle_courant(sphdata, &pfr);
-	sphdata->pass++;
-}
-
-static void sphclassical_calc_dens(ParticleData *pa, float UNUSED(dfra), SPHData *sphdata)
-{
-	ParticleSystem **psys = sphdata->psys;
-	SPHFluidSettings *fluid = psys[0]->part->fluid;
-	/* 4.0 seems to be a pretty good value */
-	float interaction_radius  = fluid->radius * (fluid->flag & SPH_FAC_RADIUS ? 4.0f * psys[0]->part->size : 1.0f);
-	SPHRangeData pfr;
-	float data[2];
-
-	data[0] = 0;
-	data[1] = 0;
-	pfr.data = data;
-	pfr.h = interaction_radius * sphdata->hfac;
-	pfr.pa = pa;
-	pfr.mass = sphdata->mass;
-
-	sph_evaluate_func( NULL, psys, pa->state.co, &pfr, interaction_radius, sphclassical_density_accum_cb);
-	pa->sphdensity = MIN2(MAX2(data[0], fluid->rest_density * 0.9f), fluid->rest_density * 1.1f);
-}
-
+						 
 void psys_sph_init(ParticleSimulationData *sim, SPHData *sphdata)
 {
 	ParticleTarget *pt;
@@ -1945,8 +1749,8 @@ void psys_sph_init(ParticleSimulationData *sim, SPHData *sphdata)
 	}
 	else {
 		/* SPH_SOLVER_CLASSICAL */
-		sphdata->force_cb = sphclassical_force_cb;
-		sphdata->density_cb = sphclassical_density_accum_cb;
+		sphdata->force_cb = BPH_sphclassical_force_cb;
+		sphdata->density_cb = BPH_sphclassical_density_accum_cb;
 		sphdata->hfac = 0.5f;
 	}
 
@@ -3525,7 +3329,7 @@ static void dynamics_step(ParticleSimulationData *sim, float cfra)
 				/* calculate summation density */
 #pragma omp parallel for firstprivate (sphdata) private (pa) schedule(dynamic,5)
 				LOOP_DYNAMIC_PARTICLES {
-					sphclassical_calc_dens(pa, pa->state.time, &sphdata);
+					BPH_sphclassical_calc_dens(pa, pa->state.time, &sphdata);
 				}
 
 				/* do global forces & effectors */

@@ -40,6 +40,7 @@ set(INC_SYS
 
 set(SRC
 	intern/BPH_mass_spring.cpp
+	intern/BPH_classical_sph.c
 	intern/ConstrainedConjugateGradient.h
 	intern/hair_volume.cpp
 	intern/implicit.h
@@ -48,6 +49,7 @@ set(SRC
 	intern/eigen_utils.h
 
 	BPH_mass_spring.h
+	BPH_classical_sph.h
 )
 
 blender_add_lib(bf_physics "${SRC}" "${INC}" "${INC_SYS}")
