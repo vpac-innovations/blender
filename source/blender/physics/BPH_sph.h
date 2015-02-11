@@ -22,19 +22,25 @@
  *
  * Contributor(s): Lukas Toenne
  *
+ * Classical SPH                                                                                                                                                             
+ * Copyright 2011-2012 AutoCRC
+ *
  * ***** END GPL LICENSE BLOCK *****
  */
 
-#ifndef __BPH_SPH_CLASSICAL_H__
-#define __BPH_SPH_CLASSICAL_H__
+#ifndef __BPH_SPH_H__
+#define __BPH_SPH_H__
 
+struct Object;
+struct Scene;
 struct BVHTree;
 struct BVHTree_RangeQuery;
+struct ParticleSettings;
 struct ParticleSystem;
 struct ParticleKey;
 struct ParticleSimulationData;
 struct ParticleData;
-struct SPHData;
+//struct SPHData;
 
 #define SPH_NEIGHBORS 512
 typedef struct SPHNeighbor {
@@ -57,15 +63,33 @@ typedef struct SPHRangeData {
   int use_size;
 } SPHRangeData;
 
+typedef struct SPHData {
+  ParticleSystem *psys[10];
+  ParticleData *pa;
+  float mass;
+  struct EdgeHash *eh;
+  float *gravity;
+  float hfac;
+  /* Average distance to neighbours (other particles in the support domain),
+   * for calculating the Courant number (adaptive time step). */
+  int pass;
+  float element_size;
+  float flow[3];
+
+  /* Integrator callbacks. This allows different SPH implementations. */
+  void (*force_cb) (void *sphdata_v, ParticleKey *state, float *force, float *impulse);
+  void (*density_cb) (void *rangedata_v, int index, float squared_dist);
+} SPHData;
+
 /* General SPH functions */
-void BPH_sph_evaluate_func(BVHTree*, ParticleSystem**, float*, SPHRangeData*, float, BVHTree_RangeQuery);
-void BPH_sph_particle_courant(SPHData*, SPHRangeData*);
-//void BPH_sph_integrate(ParticleSimulationData*, ParticleData*, float, SPHData*);
+void BPH_psys_sph_init(struct ParticleSimulationData *sim, struct SPHData *sphdata);
+void BPH_psys_sph_finalise(struct SPHData *sphdata);
+void BPH_psys_sph_density(struct BVHTree *tree, struct SPHData *data, float co[3], float vars[2]);
+
+/* DDR SPH */
+void BPH_sphDDR_step(ParticleSimulationData*, ParticleData*, float);
 
 /* Classical SPH only functions */
-void BPH_sphclassical_density_accum_cb(void*, int, float);
-void BPH_sphclassical_neighbour_accum_cb(void*, int, float);
-void BPH_sphclassical_force_cb(void*, ParticleKey*, float*, float*);
-void BPH_sphclassical_calc_dens(ParticleData*, float, SPHData*);
+void BPH_sphclassical_step(ParticleSimulationData*, ParticleData*, float);
 
 #endif

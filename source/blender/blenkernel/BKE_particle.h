@@ -90,24 +90,6 @@ typedef struct ParticleSimulationData {
 	float courant_num;
 } ParticleSimulationData;
 
-typedef struct SPHData {
-	ParticleSystem *psys[10];
-	ParticleData *pa;
-	float mass;
-	struct EdgeHash *eh;
-	float *gravity;
-	float hfac;
-	/* Average distance to neighbours (other particles in the support domain),
-	 * for calculating the Courant number (adaptive time step). */
-	int pass;
-	float element_size;
-	float flow[3];
-
-	/* Integrator callbacks. This allows different SPH implementations. */
-	void (*force_cb) (void *sphdata_v, ParticleKey *state, float *force, float *impulse);
-	void (*density_cb) (void *rangedata_v, int index, float squared_dist);
-} SPHData;
-
 typedef struct ParticleTexture {
 	float ivel;                           /* used in reset */
 	float time, life, exist, size;        /* used in init */
@@ -347,11 +329,6 @@ void BKE_particlesettings_rough_curve_init(struct ParticleSettings *part);
 void psys_apply_child_modifiers(struct ParticleThreadContext *ctx, struct ListBase *modifiers,
                                 struct ChildParticle *cpa, struct ParticleTexture *ptex, const float orco[3], const float ornor[3], float hairmat[4][4],
                                 struct ParticleCacheKey *keys, struct ParticleCacheKey *parent_keys, const float parent_orco[3]);
-
-void psys_sph_init(struct ParticleSimulationData *sim, struct SPHData *sphdata);
-void psys_sph_finalise(struct SPHData *sphdata);
-void psys_sph_density(struct BVHTree *tree, struct SPHData *data, float co[3], float vars[2]);
-
 /* for anim.c */
 void psys_get_dupli_texture(struct ParticleSystem *psys, struct ParticleSettings *part,
                             struct ParticleSystemModifierData *psmd, struct ParticleData *pa, struct ChildParticle *cpa,
@@ -381,6 +358,13 @@ void psys_check_boid_data(struct ParticleSystem *psys);
 void psys_get_birth_coords(struct ParticleSimulationData *sim, struct ParticleData *pa, struct ParticleKey *state, float dtime, float cfra);
 
 void particle_system_update(struct Scene *scene, struct Object *ob, struct ParticleSystem *psys);
+
+void integrate_particle(struct ParticleSettings *part, struct ParticleData *pa, float dtime, float *external_acceleration,
+                               void (*force_func)(void *forcedata, struct ParticleKey *state, float *force, float *impulse),
+                               void *forcedata);
+void basic_integrate(ParticleSimulationData *sim, int p, float dfra, float cfra);
+void basic_rotate(ParticleSettings *part, ParticleData *pa, float dfra, float timestep);
+void collision_check(ParticleSimulationData *sim, int p, float dfra, float cfra);
 
 /* ----------- functions needed only inside particlesystem ------------ */
 /* particle.c */
