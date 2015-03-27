@@ -520,26 +520,29 @@ void psys_thread_context_free(ParticleThreadContext *ctx)
 
 static void initialize_particle_texture(ParticleSimulationData *sim, ParticleData *pa, int p)
 {
-	ParticleSystem *psys = sim->psys;
-	ParticleSettings *part = psys->part;
-	ParticleTexture ptex;
+		ParticleSystem *psys = sim->psys;
+		ParticleSettings *part = psys->part;
+		ParticleTexture ptex;
+		bool has_texture = false;
 
-	psys_get_texture(sim, pa, &ptex, PAMAP_INIT, 0.f);
+		has_texture = psys_get_texture(sim, pa, &ptex, PAMAP_INIT, 0.f);
 	
-	switch (part->type) {
-	case PART_EMITTER:
-		if (ptex.exist < psys_frand(psys, p+125))
-			pa->flag |= PARS_UNEXIST;
-		pa->time = part->sta + (part->end - part->sta)*ptex.time;
-		break;
-	case PART_HAIR:
-		if (ptex.exist < psys_frand(psys, p+125))
-			pa->flag |= PARS_UNEXIST;
-		pa->time = 0.f;
-		break;
-	case PART_FLUID:
-		break;
-	}
+		switch (part->type) {
+				case PART_EMITTER:
+						if (has_texture) {
+								if (ptex.exist < psys_frand(psys, p+125))
+										pa->flag |= PARS_UNEXIST;
+								pa->time = part->sta + (part->end - part->sta)*ptex.time;
+								}
+						break;
+				case PART_HAIR:
+						if (ptex.exist < psys_frand(psys, p+125))
+								pa->flag |= PARS_UNEXIST;
+						pa->time = 0.f;
+						break;
+				case PART_FLUID:
+						break;
+		}
 }
 
 /* set particle parameters that don't change during particle's life */

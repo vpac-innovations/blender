@@ -161,12 +161,7 @@ static void BPH_sph_springs_modify(ParticleSystem *psys, float dtime)
 	}
 }
 
-static void BPH_sph_evaluate_func(BVHTree           *tree,
-				  ParticleSystem   **psys,
-				  float              co[3],
-				  SPHRangeData      *pfr,
-				  float              interaction_radius, 
-				  BVHTree_RangeQuery callback)
+static void BPH_sph_evaluate_func(BVHTree *tree, ParticleSystem **psys, float co[3], SPHRangeData *pfr, float interaction_radius, BVHTree_RangeQuery callback)
 {
   int i;
 
@@ -189,8 +184,7 @@ static void BPH_sph_evaluate_func(BVHTree           *tree,
   }
 }
 
-static void BPH_sph_particle_courant(SPHData      *sphdata, 
-				     SPHRangeData *pfr)
+static void BPH_sph_particle_courant(SPHData *sphdata, SPHRangeData *pfr)
 {
   ParticleData *pa, *npa;
   int i;
@@ -372,9 +366,7 @@ static void BPH_sph_force_cb(void *sphdata_v, ParticleKey *state, float *force, 
 	sphdata->pass++;
 }
 
-static void BPH_sphclassical_density_accum_cb(void *userdata, 
-					      int   index, 
-					      float UNUSED(squared_dist))
+static void BPH_sphclassical_density_accum_cb(void *userdata, int index, float UNUSED(squared_dist))
 {
   SPHRangeData *pfr = (SPHRangeData *)userdata;
   ParticleData *npa = pfr->npsys->particles + index;
@@ -407,9 +399,7 @@ static void BPH_sphclassical_density_accum_cb(void *userdata,
   pfr->data[1] += q / npa->sphdensity;
 }
 
-static void BPH_sphclassical_neighbour_accum_cb(void *userdata, 
-						int   index, 
-						float UNUSED(squared_dist))
+static void BPH_sphclassical_neighbour_accum_cb(void *userdata, int index, float UNUSED(squared_dist))
 {
   SPHRangeData *pfr = (SPHRangeData *)userdata;
   ParticleData *npa = pfr->npsys->particles + index;
@@ -433,10 +423,7 @@ static void BPH_sphclassical_neighbour_accum_cb(void *userdata,
   pfr->tot_neighbors++;
 }
 
-static void BPH_sphclassical_force_cb(void        *sphdata_v, 
-				      ParticleKey *state, 
-				      float       *force, 
-				      float       *UNUSED(impulse))
+static void BPH_sphclassical_force_cb(void *sphdata_v, ParticleKey *state, float *force, float *UNUSED(impulse))
 {
 	SPHData *sphdata = (SPHData *)sphdata_v;
 	ParticleSystem **psys = sphdata->psys;
@@ -603,10 +590,7 @@ void BPH_psys_sph_density(BVHTree *tree, SPHData *sphdata, float co[3], float va
   vars[1] = pfr.data[1];
 }
 
-
-static void BPH_sphclassical_calc_dens(ParticleData *pa, 
-				       float         UNUSED(dfra), 
-				       SPHData       *sphdata)
+static void BPH_sphclassical_calc_dens(ParticleData *pa, float UNUSED(dfra), SPHData *sphdata)
 {
   ParticleSystem **psys = sphdata->psys;
   SPHFluidSettings *fluid = psys[0]->part->fluid;
