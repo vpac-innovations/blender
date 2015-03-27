@@ -496,7 +496,8 @@ static void BPH_sphclassical_force_cb(void *sphdata_v, ParticleKey *state, float
 		 *     q2(x) = 2.0 * (2.0 - x)**4 - 4.0 * (2.0 - x)**3 * (1.0 + 2.0 * x)
 		 *     plot [0:2] q2(x)
 		 * Particles > 2h away are excluded above. */
-		dq = qfac2 * (2.0f * pow4f(2.0f - rij_h) - 4.0f * pow3f(2.0f - rij_h) * (1.0f + 2.0f * rij_h)  );
+		dq = qfac2 * (pow4f(2.0f - rij_h) - 2.0f * pow3f(2.0f - rij_h) * (1.0f + 2.0f * rij_h)  );
+		dq *= sphdata->mass;
 
 		if (pfn->psys->part->flag & PART_SIZEMASS)
 			dq *= npa->size;
