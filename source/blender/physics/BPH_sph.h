@@ -82,14 +82,11 @@ typedef struct SPHData {
 } SPHData;
 
 /* General SPH functions */
-void BPH_psys_sph_init(struct ParticleSimulationData *sim, struct SPHData *sphdata);
-void BPH_psys_sph_finalise(struct SPHData *sphdata);
-void BPH_psys_sph_density(struct BVHTree *tree, struct SPHData *data, float co[3], float vars[2]);
 
 /* DDR SPH */
-void BPH_sphDDR_step(ParticleSimulationData*, ParticleData*, float);
+void BPH_sphDDR_step(ParticleSimulationData *sim, float dtime, float cfra);
 
 /* Classical SPH only functions */
-void BPH_sphclassical_step(ParticleSimulationData*, ParticleData*, float);
+void BPH_sphclassical_step(ParticleSimulationData *sim, float dtime, float cfra);
 
 #endif

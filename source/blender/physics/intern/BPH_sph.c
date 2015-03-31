@@ -55,8 +55,7 @@ static ThreadRWMutex psys_bvhtree_rwlock = BLI_RWLOCK_INITIALIZER;
  * simulation. This should be called once per particle during a simulation
  * step, after the velocity has been updated. element_size defines the scale of                                                                        
  * the simulation, and is typically the distance to neighboring particles. */
-static void BPH_sph_update_courant_num(ParticleSimulationData *sim, ParticleData *pa,
-				       float dtime, SPHData *sphdata)
+static void sph_update_courant_num(ParticleSimulationData *sim, ParticleData *pa, float dtime, SPHData *sphdata)
 {
   float relative_vel[3];
   float speed;
@@ -67,7 +66,7 @@ static void BPH_sph_update_courant_num(ParticleSimulationData *sim, ParticleData
     sim->courant_num = speed * dtime / sphdata->element_size;
 }
 
-static ParticleSpring *BPH_sph_spring_add(ParticleSystem *psys, ParticleSpring *spring)
+static ParticleSpring* sph_spring_add(ParticleSystem *psys, ParticleSpring *spring)
 {
   /* Are more refs required? */
   if (psys->alloc_fluidsprings == 0 || psys->fluid_springs == NULL) {
@@ -86,8 +85,7 @@ static ParticleSpring *BPH_sph_spring_add(ParticleSystem *psys, ParticleSpring *
   return psys->fluid_springs + psys->tot_fluidsprings - 1;
 }
 
-
-static EdgeHash *BPH_sph_springhash_build(ParticleSystem *psys)
+static EdgeHash* sph_springhash_build(ParticleSystem *psys)
 {
   EdgeHash *springhash = NULL;
   ParticleSpring *spring;
@@ -101,7 +99,7 @@ static EdgeHash *BPH_sph_springhash_build(ParticleSystem *psys)
   return springhash;
 }
 
-static void BPH_sph_spring_delete(ParticleSystem *psys, int j)
+static void sph_spring_delete(ParticleSystem *psys, int j)
 {
 	if (j != psys->tot_fluidsprings - 1)
 		psys->fluid_springs[j] = psys->fluid_springs[psys->tot_fluidsprings - 1];
@@ -114,7 +112,7 @@ static void BPH_sph_spring_delete(ParticleSystem *psys, int j)
 	}
 }
 
-static void BPH_sph_springs_modify(ParticleSystem *psys, float dtime)
+static void sph_springs_modify(ParticleSystem *psys, float dtime)
 {
 	SPHFluidSettings *fluid = psys->part->fluid;
 	ParticleData *pa1, *pa2;
@@ -157,11 +155,11 @@ static void BPH_sph_springs_modify(ParticleSystem *psys, float dtime)
 	/* Loop through springs backwaqrds - for efficient delete function */
 	for (i=psys->tot_fluidsprings-1; i >= 0; i--) {
 		if (psys->fluid_springs[i].delete_flag)
-			BPH_sph_spring_delete(psys, i);
+			sph_spring_delete(psys, i);
 	}
 }
 
-static void BPH_sph_evaluate_func(BVHTree *tree, ParticleSystem **psys, float co[3], SPHRangeData *pfr, float interaction_radius, BVHTree_RangeQuery callback)
+static void sph_evaluate_func(BVHTree *tree, ParticleSystem **psys, float co[3], SPHRangeData *pfr, float interaction_radius, BVHTree_RangeQuery callback)
 {
   int i;
 
@@ -184,7 +182,7 @@ static void BPH_sph_evaluate_func(BVHTree *tree, ParticleSystem **psys, float co
   }
 }
 
-static void BPH_sph_particle_courant(SPHData *sphdata, SPHRangeData *pfr)
+static void sph_particle_courant(SPHData *sphdata, SPHRangeData *pfr)
 {
   ParticleData *pa, *npa;
   int i;
@@ -211,7 +209,7 @@ static void BPH_sph_particle_courant(SPHData *sphdata, SPHRangeData *pfr)
   }
 }
 
-static void BPH_sph_density_accum_cb(void *userdata, int index, float squared_dist)
+static void sph_density_accum_cb(void *userdata, int index, float squared_dist)
 {
   SPHRangeData *pfr = (SPHRangeData *)userdata;
   ParticleData *npa = pfr->npsys->particles + index;
@@ -244,7 +242,7 @@ static void BPH_sph_density_accum_cb(void *userdata, int index, float squared_di
   pfr->data[1] += q*q*q;
 }
 
-static void BPH_sph_force_cb(void *sphdata_v, ParticleKey *state, float *force, float *UNUSED(impulse))
+static void sph_force_cb(void *sphdata_v, ParticleKey *state, float *force, float *UNUSED(impulse))
 {
 	SPHData *sphdata = (SPHData *)sphdata_v;
 	ParticleSystem **psys = sphdata->psys;
@@ -289,7 +287,7 @@ static void BPH_sph_force_cb(void *sphdata_v, ParticleKey *state, float *force, 
 	pfr.pa = pa;
 	pfr.mass = sphdata->mass;
 
-	BPH_sph_evaluate_func( NULL, psys, state->co, &pfr, interaction_radius, BPH_sph_density_accum_cb);
+	sph_evaluate_func( NULL, psys, state->co, &pfr, interaction_radius, sph_density_accum_cb);
 
 	density = data[0];
 	near_density = data[1];
@@ -348,7 +346,7 @@ static void BPH_sph_force_cb(void *sphdata_v, ParticleKey *state, float *force, 
 
 					/* sph_spring_add is not thread-safe. - z0r */
 #pragma omp critical
-					BPH_sph_spring_add(psys[0], &temp_spring);
+					sph_spring_add(psys[0], &temp_spring);
 				}
 			}
 			else {/* PART_SPRING_HOOKES - Hooke's spring force */
@@ -362,11 +360,11 @@ static void BPH_sph_force_cb(void *sphdata_v, ParticleKey *state, float *force, 
 		madd_v3_v3fl(force, gravity, fluid->buoyancy * (density-rest_density));
 
 	if (sphdata->pass == 0 && psys[0]->part->time_flag & PART_TIME_AUTOSF)
-		BPH_sph_particle_courant(sphdata, &pfr);
+		sph_particle_courant(sphdata, &pfr);
 	sphdata->pass++;
 }
 
-static void BPH_sphclassical_density_accum_cb(void *userdata, int index, float UNUSED(squared_dist))
+static void sphclassical_density_accum_cb(void *userdata, int index, float UNUSED(squared_dist))
 {
   SPHRangeData *pfr = (SPHRangeData *)userdata;
   ParticleData *npa = pfr->npsys->particles + index;
@@ -399,7 +397,7 @@ static void BPH_sphclassical_density_accum_cb(void *userdata, int index, float U
   pfr->data[1] += q / npa->sphdensity;
 }
 
-static void BPH_sphclassical_neighbour_accum_cb(void *userdata, int index, float UNUSED(squared_dist))
+static void sphclassical_neighbour_accum_cb(void *userdata, int index, float UNUSED(squared_dist))
 {
   SPHRangeData *pfr = (SPHRangeData *)userdata;
   ParticleData *npa = pfr->npsys->particles + index;
@@ -423,7 +421,7 @@ static void BPH_sphclassical_neighbour_accum_cb(void *userdata, int index, float
   pfr->tot_neighbors++;
 }
 
-static void BPH_sphclassical_force_cb(void *sphdata_v, ParticleKey *state, float *force, float *UNUSED(impulse))
+static void sphclassical_force_cb(void *sphdata_v, ParticleKey *state, float *force, float *UNUSED(impulse))
 {
 	SPHData *sphdata = (SPHData *)sphdata_v;
 	ParticleSystem **psys = sphdata->psys;
@@ -464,7 +462,7 @@ static void BPH_sphclassical_force_cb(void *sphdata_v, ParticleKey *state, float
 	pfr.h = h;
 	pfr.pa = pa;
 
-	BPH_sph_evaluate_func(NULL, psys, state->co, &pfr, interaction_radius, BPH_sphclassical_neighbour_accum_cb);
+	sph_evaluate_func(NULL, psys, state->co, &pfr, interaction_radius, sphclassical_neighbour_accum_cb);
 	pressure =  stiffness * (pow7f(pa->sphdensity / rest_density) - 1.0f);
 
 	/* multiply by mass so that we return a force, not accel */
@@ -523,11 +521,11 @@ static void BPH_sphclassical_force_cb(void *sphdata_v, ParticleKey *state, float
 		madd_v3_v3fl(force, gravity, fluid->buoyancy * (pa->sphdensity - rest_density));
 
 	if (sphdata->pass == 0 && psys[0]->part->time_flag & PART_TIME_AUTOSF)
-		BPH_sph_particle_courant(sphdata, &pfr);
+		sph_particle_courant(sphdata, &pfr);
 	sphdata->pass++;
 }
 
-void BPH_psys_sph_init(ParticleSimulationData *sim, SPHData *sphdata)
+static void psys_sph_init(ParticleSimulationData *sim, SPHData *sphdata)
 {
 	ParticleTarget *pt;
 	int i;
@@ -541,7 +539,7 @@ void BPH_psys_sph_init(ParticleSimulationData *sim, SPHData *sphdata)
 		sphdata->gravity = sim->scene->physics_settings.gravity;
 	else
 		sphdata->gravity = NULL;
-	sphdata->eh = BPH_sph_springhash_build(sim->psys);
+	sphdata->eh = sph_springhash_build(sim->psys);
 
 	// These per-particle values should be overridden later, but just for
 	// completeness we give them default values now.
@@ -549,20 +547,20 @@ void BPH_psys_sph_init(ParticleSimulationData *sim, SPHData *sphdata)
 	sphdata->mass = 1.0f;
 
 	if (sim->psys->part->fluid->solver == SPH_SOLVER_DDR) {
-		sphdata->force_cb = BPH_sph_force_cb;
-		sphdata->density_cb = BPH_sph_density_accum_cb;
+		sphdata->force_cb = sph_force_cb;
+		sphdata->density_cb = sph_density_accum_cb;
 		sphdata->hfac = 1.0f;
 	}
 	else {
 		/* SPH_SOLVER_CLASSICAL */
-		sphdata->force_cb = BPH_sphclassical_force_cb;
-		sphdata->density_cb = BPH_sphclassical_density_accum_cb;
+		sphdata->force_cb = sphclassical_force_cb;
+		sphdata->density_cb = sphclassical_density_accum_cb;
 		sphdata->hfac = 0.5f;
 	}
 
 }
 
-void BPH_psys_sph_finalise(SPHData *sphdata)
+static void psys_sph_finalise(SPHData *sphdata)
 {
 	if (sphdata->eh) {
 		BLI_edgehash_free(sphdata->eh, NULL);
@@ -571,7 +569,7 @@ void BPH_psys_sph_finalise(SPHData *sphdata)
 }
 
 /* Sample the density field at a point in space. */
-void BPH_psys_sph_density(BVHTree *tree, SPHData *sphdata, float co[3], float vars[2])
+static void psys_sph_density(BVHTree *tree, SPHData *sphdata, float co[3], float vars[2])
 {
   ParticleSystem **psys = sphdata->psys;
   SPHFluidSettings *fluid = psys[0]->part->fluid;
@@ -585,13 +583,13 @@ void BPH_psys_sph_density(BVHTree *tree, SPHData *sphdata, float co[3], float va
   pfr.h = interaction_radius * sphdata->hfac;
   pfr.mass = sphdata->mass;
 
-  BPH_sph_evaluate_func(tree, psys, co, &pfr, interaction_radius, sphdata->density_cb);
+  sph_evaluate_func(tree, psys, co, &pfr, interaction_radius, sphdata->density_cb);
 
   vars[0] = pfr.data[0];
   vars[1] = pfr.data[1];
 }
 
-static void BPH_sphclassical_calc_dens(ParticleData *pa, float UNUSED(dfra), SPHData *sphdata)
+static void sphclassical_calc_dens(ParticleData *pa, float UNUSED(dfra), SPHData *sphdata)
 {
   ParticleSystem **psys = sphdata->psys;
   SPHFluidSettings *fluid = psys[0]->part->fluid;
@@ -607,15 +605,12 @@ static void BPH_sphclassical_calc_dens(ParticleData *pa, float UNUSED(dfra), SPH
   pfr.pa = pa;
   pfr.mass = sphdata->mass;
 
-  BPH_sph_evaluate_func( NULL, psys, pa->state.co, &pfr, interaction_radius, BPH_sphclassical_density_accum_cb);
+  sph_evaluate_func( NULL, psys, pa->state.co, &pfr, interaction_radius, sphclassical_density_accum_cb);
   pa->sphdensity = MIN2(MAX2(data[0], fluid->rest_density * 0.9f), fluid->rest_density * 1.1f);
 
 }
 
-static void BPH_sph_integrate(ParticleSimulationData *sim, 
-			      ParticleData           *pa, 
-			      float                   dfra, 
-			      SPHData                *sphdata)
+static void sph_integrate(ParticleSimulationData *sim, ParticleData *pa, float dfra, SPHData *sphdata)
 {
   ParticleSettings *part = sim->psys->part;
   // float timestep = psys_get_timestep(sim); // UNUSED                                                                                                                                                
@@ -637,17 +632,16 @@ static void BPH_sph_integrate(ParticleSimulationData *sim,
   integrate_particle(part, pa, dtime, effector_acceleration, sphdata->force_cb, sphdata);
 }
 
-void BPH_sphDDR_step(ParticleSimulationData *sim, ParticleData *pa, float cfra)
+void BPH_sphDDR_step(ParticleSimulationData *sim, float dtime, float cfra)
 {
   SPHData sphdata;
   ParticleSettings *part = sim->psys->part;
   ParticleSystem *psys = sim->psys;
-  float timestep, dtime;
-  int p;
+  float timestep;
+  PARTICLE_P;
 
   timestep = psys_get_timestep(sim);
-  dtime = pa->state.time*timestep;
-  BPH_psys_sph_init(sim, &sphdata);
+  psys_sph_init(sim, &sphdata);
 
   /* Apply SPH forces using double-density relaxation algorithm                                                                                                                
    * (Clavat et. al.) */
@@ -657,7 +651,7 @@ void BPH_sphDDR_step(ParticleSimulationData *sim, ParticleData *pa, float cfra)
     basic_integrate(sim, p, pa->state.time, cfra);
 
     /* actual fluids calculations */
-    BPH_sph_integrate(sim, pa, pa->state.time, &sphdata);
+    sph_integrate(sim, pa, pa->state.time, &sphdata);
 
     if (sim->colliders)
       collision_check(sim, p, pa->state.time, cfra);
@@ -668,24 +662,23 @@ void BPH_sphDDR_step(ParticleSimulationData *sim, ParticleData *pa, float cfra)
 
 #pragma omp critical
     if (part->time_flag & PART_TIME_AUTOSF)
-      BPH_sph_update_courant_num(sim, pa, dtime, &sphdata);
+      sph_update_courant_num(sim, pa, dtime, &sphdata);
   }
 
-  BPH_sph_springs_modify(psys, timestep);
-  BPH_psys_sph_finalise(&sphdata);
+  sph_springs_modify(psys, timestep);
+  psys_sph_finalise(&sphdata);
 }
 
-void BPH_sphclassical_step(ParticleSimulationData *sim, ParticleData *pa, float cfra)
+void BPH_sphclassical_step(ParticleSimulationData *sim, float dtime, float cfra)
 {
   SPHData sphdata;
   ParticleSettings *part = sim->psys->part;
   ParticleSystem *psys = sim->psys;
-  float timestep, dtime;
-  int p;
+  float timestep;
+  PARTICLE_P;
 
   timestep = psys_get_timestep(sim);
-  dtime = pa->state.time*timestep;
-  BPH_psys_sph_init(sim, &sphdata);
+  psys_sph_init(sim, &sphdata);
 
 #pragma omp parallel for private (pa) schedule(dynamic,5)
   LOOP_DYNAMIC_PARTICLES {
@@ -695,13 +688,13 @@ void BPH_sphclassical_step(ParticleSimulationData *sim, ParticleData *pa, float 
   /* Calculate summation density */
 #pragma omp parallel for firstprivate (sphdata) private (pa) schedule(dynamic,5)
   LOOP_DYNAMIC_PARTICLES {
-    BPH_sphclassical_calc_dens(pa, pa->state.time, &sphdata);
+    sphclassical_calc_dens(pa, pa->state.time, &sphdata);
   }
   
   /* Do global forces and effectors */  
 #pragma omp parallel for firstprivate (sphdata) private (pa) schedule(dynamic,5)
   LOOP_DYNAMIC_PARTICLES {
-    BPH_sph_integrate(sim, pa, pa->state.time, &sphdata);
+    sph_integrate(sim, pa, pa->state.time, &sphdata);
     
     if (sim->colliders)
       collision_check(sim, p, pa->state.time, cfra);
@@ -712,8 +705,8 @@ void BPH_sphclassical_step(ParticleSimulationData *sim, ParticleData *pa, float 
 
 #pragma omp critical
     if (part->time_flag & PART_TIME_AUTOSF)
-      BPH_sph_update_courant_num(sim, pa, dtime, &sphdata);
+      sph_update_courant_num(sim, pa, dtime, &sphdata);
   }
 
-  BPH_psys_sph_finalise(&sphdata);
+  psys_sph_finalise(&sphdata);
 }

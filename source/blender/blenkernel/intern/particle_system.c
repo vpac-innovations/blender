@@ -2878,14 +2878,14 @@ static void dynamics_step(ParticleSimulationData *sim, float cfra)
 			  /* SPH_SOLVER_DDR */
 			  /* Apply SPH forces using DDR algorithm (due to Clavet, 
 			   * Beaudoin and Poulin). */
-			  BPH_sphDDR_step(sim, pa, cfra);
+			  BPH_sphDDR_step(sim, dtime, cfra);
 			}
 			else {
 			  /* SPH_SOLVER_CLASSICAL */
 			  /* Apply SPH forces using classical algorithm (due to Gingold
 			   * and Monaghan). Note that, unlike double-density relaxation,
 			   * this algorithm is separated into distinct loops. */
-			  BPH_sphclassical_step(sim, pa, cfra);
+			  BPH_sphclassical_step(sim, dtime, cfra);
 			}
 			break;
 		}
