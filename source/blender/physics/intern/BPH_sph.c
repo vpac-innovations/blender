@@ -491,8 +491,10 @@ static void sphclassical_force_cb(void *sphdata_v, ParticleKey *state, float *fo
 
 		/* First derivative of smoothing factor. Utilise the Wendland kernel.
 		 * gnuplot:
-		 *     q2(x) = 2.0 * (2.0 - x)**4 - 4.0 * (2.0 - x)**3 * (1.0 + 2.0 * x)
+		 *     q2(x) = (2.0 - x)**4 - 2.0 * (2.0 - x)**3 * (1.0 + 2.0 * x)
 		 *     plot [0:2] q2(x)
+		 * comparison with smoothing factor q1 (see above) in gnuplot:
+		 *     plot [0:2] q1(x), q2(x)
 		 * Particles > 2h away are excluded above. */
 		dq = qfac2 * (pow4f(2.0f - rij_h) - 2.0f * pow3f(2.0f - rij_h) * (1.0f + 2.0f * rij_h)  );
 		dq *= sphdata->mass;
