@@ -142,7 +142,7 @@ static int tot_particles(ParticleSystem *psys, PTCacheID *pid)
 	if (pid && psys->pointcache->flag & PTCACHE_EXTERNAL)
 		return pid->cache->totpoint;
 	else if (psys->part->distr == PART_DISTR_GRID && psys->part->from != PART_FROM_VERT)
-		return psys->part->grid_res * psys->part->grid_res * psys->part->grid_res - psys->totunexist;
+		return psys->part->grid_res * psys->part->grid_res * psys->part->grid_res - psys->totunexist + psys->totsplit * 8;
 	else
 		return psys->part->totpart - psys->totunexist;
 }
@@ -197,7 +197,7 @@ void psys_reset(ParticleSystem *psys, int mode)
 	psys->tot_fluidsprings = psys->alloc_fluidsprings = 0;
 }
 
-static void realloc_particles(ParticleSimulationData *sim, int new_totpart)
+void realloc_particles(ParticleSimulationData *sim, int new_totpart)
 {
 	ParticleSystem *psys = sim->psys;
 	ParticleSettings *part = psys->part;
@@ -1044,6 +1044,12 @@ void reset_particle(ParticleSimulationData *sim, ParticleData *pa, float dtime, 
 	else
 		pa->alive = PARS_ALIVE;
 
+	if (!pa->split){
+		pa->split = PARS_UNSPLIT;
+		pa->sphalpha = 1.f;
+		pa->sphmassfac = 1.f;
+	}
+
 	pa->state.time = cfra;
 }
 static void reset_all_particles(ParticleSimulationData *sim, float dtime, float cfra, int from)
@@ -1284,11 +1290,14 @@ void integrate_particle(ParticleSettings *part, ParticleData *pa, float dtime, f
 
 	ParticleKey states[5];
 	float force[3], acceleration[3], impulse[3], dx[4][3] = ZERO_F43, dv[4][3] = ZERO_F43, oldpos[3];
-	float pa_mass= (part->flag & PART_SIZEMASS ? part->mass * pa->size : part->mass);
+	float pa_mass = (part->flag & PART_SIZEMASS ? part->mass * pa->size : part->mass);
 	int i, steps=1;
 	int integrator = part->integrator;
 
 #undef ZERO_F43
+
+	if(pa->split)
+		pa_mass *= pa->sphmassfac;
 
 	copy_v3_v3(oldpos, pa->state.co);
 
@@ -2853,6 +2862,18 @@ static void dynamics_step(ParticleSimulationData *sim, float cfra)
 				/* rotations */
 				basic_rotate(part, pa, pa->state.time, timestep);
 			}
+
+#if 0
+			if (cfra == 50) {
+				LOOP_DYNAMIC_PARTICLES{
+					if(p==0){
+						printf("particle 0 x: %f\n", pa->state.co[0]);
+						split_particle(sim, p, cfra);
+					}
+				}
+			}
+#endif
+
 			break;
 		}
 		case PART_PHYS_BOIDS:
@@ -2886,6 +2907,15 @@ static void dynamics_step(ParticleSimulationData *sim, float cfra)
 			   * and Monaghan). Note that, unlike double-density relaxation,
 			   * this algorithm is separated into distinct loops. */
 			  BPH_sphclassical_step(sim, dtime, cfra);
+
+			  /* Particle splitting*/
+  #if 1
+			  if (cfra > 7 && cfra < 9) {
+				  LOOP_DYNAMIC_PARTICLES{
+					  BPH_sph_split_particle(sim, p, cfra);
+				  }
+			  }
+  #endif
 			}
 			break;
 		}

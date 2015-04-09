@@ -405,7 +405,7 @@ void distribute_particles(struct ParticleSimulationData *sim, int from);
 void initialize_particle(struct ParticleSimulationData *sim, struct ParticleData *pa);
 void psys_calc_dmcache(struct Object *ob, struct DerivedMesh *dm, struct ParticleSystem *psys);
 int psys_particle_dm_face_lookup(struct Object *ob, struct DerivedMesh *dm, int index, const float fw[4], struct LinkNode *node);
-
+void realloc_particles(struct ParticleSimulationData *sim, int new_totpart);
 void reset_particle(struct ParticleSimulationData *sim, struct ParticleData *pa, float dtime, float cfra);
 
 float psys_get_current_display_percentage(struct ParticleSystem *psys);

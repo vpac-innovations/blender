@@ -82,6 +82,7 @@ typedef struct SPHData {
 } SPHData;
 
 /* General SPH functions */
+void BPH_sph_split_particle(ParticleSimulationData *sim, int index, float cfra);
 
 /* DDR SPH */
 void BPH_sphDDR_step(ParticleSimulationData *sim, float dtime, float cfra);
