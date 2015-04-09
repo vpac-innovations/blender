@@ -118,7 +118,11 @@ typedef struct ParticleData {
 	float size;				/* size and multiplier so that we can update size when ever */
 
 	float sphdensity;		/* density of sph particle */
-	int pad;
+	float sphmassfac;		/* mass factor for particle splitting */
+	float sphalpha;			/* smoothing length factor for particle splitting */
+
+	short pad;
+	short split;			/* splitting status of a particle*/
 
 	int hair_index;
 	short flag;
@@ -322,6 +326,8 @@ typedef struct ParticleSystem {
 
 	float dt_frac;							/* current time step, as a fraction of a frame */
 	float _pad;								/* spare capacity */
+	int totsplit;
+	int _pad2;
 } ParticleSystem;
 
 typedef enum eParticleDrawFlag {
@@ -555,6 +561,10 @@ typedef enum eParticleChildFlag {
 #define PARS_UNBORN			2
 #define PARS_ALIVE			3
 #define PARS_DYING			4
+
+/* pars->split*/
+#define PARS_SPLIT			1
+#define PARS_UNSPLIT		2
 
 /* ParticleDupliWeight->flag */
 #define PART_DUPLIW_CURRENT	1

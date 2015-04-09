@@ -51,6 +51,135 @@ static ThreadRWMutex psys_bvhtree_rwlock = BLI_RWLOCK_INITIALIZER;
 
 #define PSYS_FLUID_SPRINGS_INITIAL_SIZE 256
 
+static void split_positions(ParticleSimulationData *sim, ParticleData *pa, int num)
+{
+	float h = sim->psys->part->fluid->radius * 0.5f;
+	float eps = 0.7f * h;
+	float factor = eps * sqrt(3.f) / 3.f;
+
+	switch(num){
+		case 1:
+			pa->state.co[0] += factor;
+			pa->state.co[1] += factor;
+			pa->state.co[2] += factor;
+			/* Not sure if this is appropriate.*/
+			pa->prev_state.co[0] += factor;
+			pa->prev_state.co[1] += factor;
+			pa->prev_state.co[2] += factor;
+			break;
+		case 2:
+			pa->state.co[0] += factor;
+			pa->state.co[1] += factor;
+			pa->state.co[2] -= factor;
+			/* Not sure if this is appropriate.*/
+			pa->prev_state.co[0] += factor;
+			pa->prev_state.co[1] += factor;
+			pa->prev_state.co[2] -= factor;
+			break;
+		case 3:
+			pa->state.co[0] += factor;
+			pa->state.co[1] -= factor;
+			pa->state.co[2] -= factor;
+			/* Not sure if this is appropriate.*/
+			pa->prev_state.co[0] += factor;
+			pa->prev_state.co[1] -= factor;
+			pa->prev_state.co[2] -= factor;
+			break;
+		case 4:
+			pa->state.co[0] -= factor;
+			pa->state.co[1] -= factor;
+			pa->state.co[2] -= factor;
+			/* Not sure if this is appropriate.*/
+			pa->prev_state.co[0] -= factor;
+			pa->prev_state.co[1] -= factor;
+			pa->prev_state.co[2] -= factor;
+			break;
+		case 5:
+			pa->state.co[0] -= factor;
+			pa->state.co[1] += factor;
+			pa->state.co[2] += factor;
+			/* Not sure if this is appropriate.*/
+			pa->prev_state.co[0] -= factor;
+			pa->prev_state.co[1] += factor;
+			pa->prev_state.co[2] += factor;
+			break;
+		case 6:
+			pa->state.co[0] -= factor;
+			pa->state.co[1] -= factor;
+			pa->state.co[2] += factor;
+			/* Not sure if this is appropriate.*/
+			pa->prev_state.co[0] -= factor;
+			pa->prev_state.co[1] -= factor;
+			pa->prev_state.co[2] += factor;
+			break;
+		case 7:
+			pa->state.co[0] += factor;
+			pa->state.co[1] -= factor;
+			pa->state.co[2] += factor;
+			/* Not sure if this is appropriate.*/
+			pa->prev_state.co[0] += factor;
+			pa->prev_state.co[1] -= factor;
+			pa->prev_state.co[2] += factor;
+			break;
+		case 8:
+			pa->state.co[0] -= factor;
+			pa->state.co[1] += factor;
+			pa->state.co[2] -= factor;
+			/* Not sure if this is appropriate.*/
+			pa->prev_state.co[0] -= factor;
+			pa->prev_state.co[1] += factor;
+			pa->prev_state.co[2] -= factor;
+			break;
+		default:
+			break;
+	}
+}
+
+void BPH_sph_split_particle(ParticleSimulationData *sim, int index, float cfra)
+{
+	ParticleSystem *psys = sim->psys;
+	ParticleSettings *part = psys->part;
+	ParticleData *pa, *new_pa;
+	int oldtotpart = psys->totpart;
+	int newtotpart = oldtotpart+8;
+	int i;
+
+	pa = psys->particles+index;
+
+	/* Split particles below given z-value */
+	if((pa->state.co[2] >= -0.5 || pa->state.co[2] <= -0.6) ||
+	   (pa->state.co[1] <= 0.4 || pa->state.co[1] >= 0.7) ||
+	   (pa->state.co[0] >= -0.5 || pa->state.co[0] <= -0.6))
+		return;
+
+	if(pa->split == PARS_UNSPLIT){
+		/* Re-allocate particles array */
+		realloc_particles(sim, newtotpart);
+		pa = psys->particles+index;
+
+		pa->split = PARS_SPLIT;
+		pa->sphalpha = 0.75f;
+		pa->sphmassfac = 0.253311f;
+
+		/* Make copies of parent particle at end of particles array */
+		for(i = 0; i < 8; i++){
+			new_pa = psys->particles+oldtotpart+i;
+			memcpy(new_pa, pa, sizeof(ParticleData));
+			new_pa->sphmassfac = 0.0933361f;
+
+			/* Set position for new particle */
+			split_positions(sim, new_pa, i+1);
+
+			/* Set birth time. Offset to avoid particle reset. Is this robust though?*/
+			psys -> particles[oldtotpart+i].time = cfra - 0.001/((float)(part->subframes + 1));
+		}
+		/* Update ParticleSettings->totpart.
+				  ParticleSystem->totpart? */
+		psys->part->totpart = newtotpart;
+		psys->totsplit += 1;
+	}
+}
+
 /* Calculate the speed of the particle relative to the local scale of the
  * simulation. This should be called once per particle during a simulation
  * step, after the velocity has been updated. element_size defines the scale of                                                                        
@@ -152,7 +281,7 @@ static void sph_springs_modify(ParticleSystem *psys, float dtime)
 			spring->delete_flag = 1;
 	}
 
-	/* Loop through springs backwaqrds - for efficient delete function */
+	/* Loop through springs backwards - for efficient delete function */
 	for (i=psys->tot_fluidsprings-1; i >= 0; i--) {
 		if (psys->fluid_springs[i].delete_flag)
 			sph_spring_delete(psys, i);
@@ -378,6 +507,7 @@ static void sphclassical_density_accum_cb(void *userdata, int index, float squar
 {
   SPHRangeData *pfr = (SPHRangeData *)userdata;
   ParticleData *npa = pfr->npsys->particles + index;
+  float massfac = npa->sphmassfac;
   float q;
   float qfac = 21.0f / (256.f * (float)M_PI);
   float rij, rij_h;
@@ -392,7 +522,7 @@ static void sphclassical_density_accum_cb(void *userdata, int index, float squar
     sub_v3_v3v3(vec, npa->state.co, pfr->pa->state.co);
     rij = len_v3(vec);
   }
-  rij_h = rij / pfr->h;
+  rij_h = rij / (pfr->h * npa->sphalpha);
   if (rij_h > 2.0f)
   return;
 
@@ -403,8 +533,8 @@ static void sphclassical_density_accum_cb(void *userdata, int index, float squar
    * gnuplot:
    *     q1(x) = (2.0 - x)**4 * ( 1.0 + 2.0 * x)
    *     plot [0:2] q1(x) */
-  q  = qfac / pow3f(pfr->h) * pow4f(2.0f - rij_h) * ( 1.0f + 2.0f * rij_h);
-  q *= pfr->npsys->part->mass;
+  q  = qfac / pow3f(pfr->h * npa->sphalpha) * pow4f(2.0f - rij_h) * ( 1.0f + 2.0f * rij_h);
+  q *= pfr->npsys->part->mass * massfac;
   
   if (pfr->use_size)
     q *= pfr->pa->size;
@@ -488,7 +618,7 @@ static void sphclassical_force_cb(void *sphdata_v, ParticleKey *state, float *fo
 	sphclassical_equation_of_state(sphdata, &pfr.params);
 
 	/* multiply by mass so that we return a force, not accel */
-	qfac2 *= sphdata->mass / pow3f(pfr.h);
+	qfac2 *= sphdata->mass * pa->sphmassfac;
 
 	pfn = pfr.neighbors;
 	for (i = 0; i < pfr.tot_neighbors; i++, pfn++) {
@@ -497,6 +627,9 @@ static void sphclassical_force_cb(void *sphdata_v, ParticleKey *state, float *fo
 			/* we do not contribute to ourselves */
 			continue;
 		}
+
+		/*Symmetrize kernel for particle splitting */
+		pfr.h = (h/2) * (pa->sphalpha + npa->sphalpha);
 
 		/* Find vector to neighbor. Exclude particles that are more than 2h
 		 * away. Can't use current state here because it may have changed on
@@ -522,8 +655,8 @@ static void sphclassical_force_cb(void *sphdata_v, ParticleKey *state, float *fo
 		 * comparison with smoothing factor q1 (see above) in gnuplot:
 		 *     plot [0:2] q(x), dq(x)
 		 * Particles > 2h away are excluded above. */
-		dq = qfac2 * (pow4f(2.0f - rij_h) - 2.0f * pow3f(2.0f - rij_h) * (1.0f + 2.0f * rij_h)  );
-		dq *= sphdata->mass;
+		dq = (qfac2 / pow3f(pfr.h)) * (pow4f(2.0f - rij_h) - 2.0f * pow3f(2.0f - rij_h) * (1.0f + 2.0f * rij_h)  );
+		dq *= sphdata->mass * npa->sphmassfac;
 
 		if (pfn->psys->part->flag & PART_SIZEMASS)
 			dq *= npa->size;
