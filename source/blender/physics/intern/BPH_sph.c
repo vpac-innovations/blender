@@ -382,11 +382,13 @@ static void sphclassical_density_accum_cb(void *userdata, int index, float UNUSE
   if (rij_h > 2.0f)
   return;
 
-  /* Smoothing factor. Utilise the Wendland kernel. gnuplot:                                    
-   *     q1(x) = (2.0 - x)**4 * ( 1.0 + 2.0 * x)                                                
+  /* Smoothing factor. Use a 5th order Wendland kernel.
+   * http://arxiv.org/abs/1204.2471
+   * The `pow3` is because we're working in 3D space.
+   *
+   * gnuplot:
+   *     q1(x) = (2.0 - x)**4 * ( 1.0 + 2.0 * x)
    *     plot [0:2] q1(x) */
-
-  
   q  = qfac / pow3f(pfr->h) * pow4f(2.0f - rij_h) * ( 1.0f + 2.0f * rij_h);
   q *= pfr->npsys->part->mass;
   
@@ -463,6 +465,8 @@ static void sphclassical_force_cb(void *sphdata_v, ParticleKey *state, float *fo
 	pfr.pa = pa;
 
 	sph_evaluate_func(NULL, psys, state->co, &pfr, interaction_radius, sphclassical_neighbour_accum_cb);
+
+	/* Equation of state: convert density to pressure. */
 	pressure =  stiffness * (pow7f(pa->sphdensity / rest_density) - 1.0f);
 
 	/* multiply by mass so that we return a force, not accel */
@@ -487,14 +491,17 @@ static void sphclassical_force_cb(void *sphdata_v, ParticleKey *state, float *fo
 		if (rij_h > 2.0f)
 			continue;
 
+		/* Equation of state: convert density of neighbor to pressure. */
 		npressure = stiffness * (pow7f(npa->sphdensity / rest_density) - 1.0f);
 
-		/* First derivative of smoothing factor. Utilise the Wendland kernel.
+		/* First derivative of smoothing factor. Utilise the Wendland kernel
+		 * (see above).
+		 *
 		 * gnuplot:
-		 *     q2(x) = (2.0 - x)**4 - 2.0 * (2.0 - x)**3 * (1.0 + 2.0 * x)
-		 *     plot [0:2] q2(x)
+		 *     dq(x) = (2.0 - x)**4 - 2.0 * (2.0 - x)**3 * (1.0 + 2.0 * x)
+		 *     plot [0:2] dq(x)
 		 * comparison with smoothing factor q1 (see above) in gnuplot:
-		 *     plot [0:2] q1(x), q2(x)
+		 *     plot [0:2] q(x), dq(x)
 		 * Particles > 2h away are excluded above. */
 		dq = qfac2 * (pow4f(2.0f - rij_h) - 2.0f * pow3f(2.0f - rij_h) * (1.0f + 2.0f * rij_h)  );
 		dq *= sphdata->mass;
@@ -504,8 +511,13 @@ static void sphclassical_force_cb(void *sphdata_v, ParticleKey *state, float *fo
 
 		pressureTerm = pressure / pow2f(pa->sphdensity) + npressure / pow2f(npa->sphdensity);
 
-		/* Note that 'minus' is removed, because vec = vecBA, not vecAB.
-		 * This applies to the viscosity calculation below, too. */
+		/* Apply pressure of neighbor (scalar) as a force (vector). The
+		 * total force is found by summing over all neighboring particles.
+		 * Note that 'minus' is removed, because vec = vecBA, not vecAB.
+		 * This applies to the viscosity calculation below, too.
+		 *
+		 * We multiply the pressure term by the gradient of the smoothing
+		 * kernel `dq` to find the pressure gradient. */
 		madd_v3_v3fl(force, vec, pressureTerm * dq);
 
 		/* Viscosity */
