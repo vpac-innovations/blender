@@ -369,7 +369,7 @@ static void sphclassical_density_accum_cb(void *userdata, int index, float UNUSE
   SPHRangeData *pfr = (SPHRangeData *)userdata;
   ParticleData *npa = pfr->npsys->particles + index;
   float q;
-  float qfac = 21.0f / (256.f * (float)M_PI);
+  float qfac;
   float rij, rij_h;
   float vec[3];
 
@@ -382,21 +382,21 @@ static void sphclassical_density_accum_cb(void *userdata, int index, float UNUSE
   if (rij_h > 2.0f)
   return;
 
-  /* Smoothing factor. Use a 5th order Wendland kernel.
+  /* Smoothing factor. Use a 5th order Wendland kernel (C2 with v=3).
    * http://arxiv.org/abs/1204.2471
    * The `pow3` is because we're working in 3D space.
    *
    * gnuplot:
    *     q1(x) = (2.0 - x)**4 * ( 1.0 + 2.0 * x)
    *     plot [0:2] q1(x) */
-  q  = qfac / pow3f(pfr->h) * pow4f(2.0f - rij_h) * ( 1.0f + 2.0f * rij_h);
+  qfac = 21.0f / (256.f * (float)M_PI);
+  q = qfac / pfr->h3 * pow4f(2.0f - rij_h) * ( 1.0f + 2.0f * rij_h);
   q *= pfr->npsys->part->mass;
   
   if (pfr->use_size)
     q *= pfr->pa->size;
 
   pfr->data[0] += q;
-  pfr->data[1] += q / npa->sphdensity;
 }
 
 static void sphclassical_neighbour_accum_cb(void *userdata, int index, float UNUSED(squared_dist))
@@ -434,7 +434,6 @@ static void sphclassical_force_cb(void *sphdata_v, ParticleKey *state, float *fo
 	float *gravity = sphdata->gravity;
 
 	float dq, u, rij, dv[3];
-	float pressure, npressure;
 
 	float visc = fluid->viscosity_omega;
 
@@ -443,9 +442,6 @@ static void sphclassical_force_cb(void *sphdata_v, ParticleKey *state, float *fo
 	/* 4.77 is an experimentally determined density factor */
 	float rest_density = fluid->rest_density * (fluid->flag & SPH_FAC_DENSITY ? 4.77f : 1.0f);
 
-	// Use speed of sound squared
-	float stiffness = pow2f(fluid->stiffness_k);
-
 	ParticleData *npa;
 	float vec[3];
 	float co[3];
@@ -453,7 +449,7 @@ static void sphclassical_force_cb(void *sphdata_v, ParticleKey *state, float *fo
 
 	int i;
 
-	float qfac2 = 42.0f / (256.0f * (float)M_PI);
+	float qfac2;
 	float rij_h;
 
 	/* 4.0 here is to be consistent with previous formulation/interface */
@@ -462,15 +458,14 @@ static void sphclassical_force_cb(void *sphdata_v, ParticleKey *state, float *fo
 	hinv = 1.0f / h;
 
 	pfr.h = h;
+	pfr.h3 = pow3f(pfr.h);
 	pfr.pa = pa;
 
 	sph_evaluate_func(NULL, psys, state->co, &pfr, interaction_radius, sphclassical_neighbour_accum_cb);
 
-	/* Equation of state: convert density to pressure. */
-	pressure =  stiffness * (pow7f(pa->sphdensity / rest_density) - 1.0f);
-
 	/* multiply by mass so that we return a force, not accel */
-	qfac2 *= sphdata->mass / pow3f(pfr.h);
+	qfac2 = 2 * 21.0f / (256.0f * (float)M_PI);
+	qfac2 *= sphdata->mass / pfr.h3;
 
 	pfn = pfr.neighbors;
 	for (i = 0; i < pfr.tot_neighbors; i++, pfn++) {
@@ -491,9 +486,6 @@ static void sphclassical_force_cb(void *sphdata_v, ParticleKey *state, float *fo
 		if (rij_h > 2.0f)
 			continue;
 
-		/* Equation of state: convert density of neighbor to pressure. */
-		npressure = stiffness * (pow7f(npa->sphdensity / rest_density) - 1.0f);
-
 		/* First derivative of smoothing factor. Utilise the Wendland kernel
 		 * (see above).
 		 *
@@ -509,7 +501,7 @@ static void sphclassical_force_cb(void *sphdata_v, ParticleKey *state, float *fo
 		if (pfn->psys->part->flag & PART_SIZEMASS)
 			dq *= npa->size;
 
-		pressureTerm = pressure / pow2f(pa->sphdensity) + npressure / pow2f(npa->sphdensity);
+		pressureTerm = pa->sphpressure / pa->sphdensity2 + npa->sphpressure / npa->sphdensity2;
 
 		/* Apply pressure of neighbor (scalar) as a force (vector). The
 		 * total force is found by summing over all neighboring particles.
@@ -607,6 +599,7 @@ static void sphclassical_calc_dens(ParticleData *pa, float UNUSED(dfra), SPHData
 {
   ParticleSystem **psys = sphdata->psys;
   SPHFluidSettings *fluid = psys[0]->part->fluid;
+  float rest_density = fluid->rest_density * (fluid->flag & SPH_FAC_DENSITY ? 4.77f : 1.0f);
   /* 4.0 seems to be a pretty good value */
   float interaction_radius  = fluid->radius * (fluid->flag & SPH_FAC_RADIUS ? 4.0f * psys[0]->part->size : 1.0f);
   SPHRangeData pfr;
@@ -616,12 +609,16 @@ static void sphclassical_calc_dens(ParticleData *pa, float UNUSED(dfra), SPHData
   data[1] = 0;
   pfr.data = data;
   pfr.h = interaction_radius * sphdata->hfac;
+  pfr.h3 = pow3f(pfr.h);
   pfr.pa = pa;
   pfr.mass = sphdata->mass;
 
   sph_evaluate_func( NULL, psys, pa->state.co, &pfr, interaction_radius, sphclassical_density_accum_cb);
   pa->sphdensity = MIN2(MAX2(data[0], fluid->rest_density * 0.9f), fluid->rest_density * 1.1f);
+  pa->sphdensity2 = pow2f(pa->sphdensity);
 
+  /* Equation of state: convert density to pressure. Use speed of sound squared. */
+  pa->sphpressure = pow2f(fluid->stiffness_k) * (pow7f(pa->sphdensity / rest_density) - 1.0f);
 }
 
 static void sph_integrate(ParticleSimulationData *sim, ParticleData *pa, float dfra, SPHData *sphdata)

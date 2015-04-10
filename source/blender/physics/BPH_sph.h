@@ -58,6 +58,7 @@ typedef struct SPHRangeData {
   ParticleData *pa;
 
   float h;
+  float h3;
   float mass;
   float massfac;
   int use_size;

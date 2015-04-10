@@ -118,11 +118,14 @@ typedef struct ParticleData {
 	float size;				/* size and multiplier so that we can update size when ever */
 
 	float sphdensity;		/* density of sph particle */
-	int pad;
+	float sphpressure;		/* pressure of sph particle */
 
 	int hair_index;
 	short flag;
 	short alive;			/* the life state of a particle */
+
+	float sphdensity2;		/* density of sph particle */
+	int pad;
 } ParticleData;
 
 typedef struct SPHFluidSettings {
