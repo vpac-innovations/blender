@@ -60,7 +60,7 @@ static int split_through_wall_test(ParticleSimulationData *sim, ParticleData *pa
 	ListBase *colliders = sim->colliders;
 	BVHTreeFromMesh treeData = {NULL};
 	Object *current;
-	float ray_start[3], ray_end[3], ray_dir[3];
+	float ray_start[3], ray_end[3], ray_dir[3], old_dist;
 
 	if(BLI_listbase_is_empty(colliders))
 		return 0;
@@ -75,7 +75,7 @@ static int split_through_wall_test(ParticleSimulationData *sim, ParticleData *pa
 	/* Iterate over colliders and check for intersect */
 	for(coll=colliders->first; coll; coll=coll->next){
 		current = coll->ob;
-
+		old_dist = hit->dist;
 		/* Create bvhtree from current object. Check last 3 args are appropriate. */
 		/* 0.0f is epsilon parameter, if 0.0f, over-written with FLT_EPSILON	  */
 		/* Next parameter is 'tree_type' not sure what that controls or how to	  */
@@ -85,7 +85,11 @@ static int split_through_wall_test(ParticleSimulationData *sim, ParticleData *pa
 		bvhtree_from_mesh_faces(&treeData, current->derivedFinal, 0.0f, 4, 6);
 
 		/* Ray cast. Not sure what comes out of this at the moment. */
-		BLI_bvhtree_ray_cast(treeData.tree, ray_start, ray_dir, pa->size, &hit, treeData.raycast_callback, &treeData);
+		BLI_bvhtree_ray_cast(treeData.tree, ray_start, ray_dir, pa->size, hit, treeData.raycast_callback, &treeData);
+
+		/* Throw out new hit distance if previous one was shorter. */
+		if(old_dist < hit->dist)
+			hit->dist = old_dist;
 
 		/* Free pointer to re-use? No idea if this works */
 		/* Free's memory allocated by treeData, then sets sizeof(treeData) sized  */
@@ -94,7 +98,6 @@ static int split_through_wall_test(ParticleSimulationData *sim, ParticleData *pa
 		/* still work?															  */
 		free_bvhtree_from_mesh(&treeData);
 	}
-
 	return hit->index >= 0;
 }
 
@@ -121,7 +124,7 @@ static void split_positions(ParticleSimulationData *sim, ParticleData *pa, int n
 
 			i = split_through_wall_test(sim, &test_pa, &hit);
 			if(i)
-				factor = (hit.dist-2.f*pa->size)*sqrt(3.f) / 3.f;
+				factor = (hit.dist-1.f*pa->size)*sqrt(3.f) / 3.f;
 
 			pa->state.co[0] += factor;
 			pa->state.co[1] += factor;
@@ -139,7 +142,7 @@ static void split_positions(ParticleSimulationData *sim, ParticleData *pa, int n
 
 			i = split_through_wall_test(sim, &test_pa, &hit);
 			if(i)
-				factor = (hit.dist-2.f*pa->size)*sqrt(3.f) / 3.f;
+				factor = (hit.dist-1.f*pa->size)*sqrt(3.f) / 3.f;
 
 			pa->state.co[0] += factor;
 			pa->state.co[1] += factor;
@@ -156,7 +159,7 @@ static void split_positions(ParticleSimulationData *sim, ParticleData *pa, int n
 
 			i = split_through_wall_test(sim, &test_pa, &hit);
 			if(i)
-				factor = (hit.dist-2.f*pa->size)*sqrt(3.f) / 3.f;
+				factor = (hit.dist-1.f*pa->size)*sqrt(3.f) / 3.f;
 
 			pa->state.co[0] += factor;
 			pa->state.co[1] -= factor;
@@ -173,7 +176,7 @@ static void split_positions(ParticleSimulationData *sim, ParticleData *pa, int n
 
 			i = split_through_wall_test(sim, &test_pa, &hit);
 			if(i)
-				factor = (hit.dist-2.f*pa->size)*sqrt(3.f) / 3.f;
+				factor = (hit.dist-1.f*pa->size)*sqrt(3.f) / 3.f;
 
 			pa->state.co[0] -= factor;
 			pa->state.co[1] -= factor;
@@ -190,7 +193,7 @@ static void split_positions(ParticleSimulationData *sim, ParticleData *pa, int n
 
 			i = split_through_wall_test(sim, &test_pa, &hit);
 			if(i)
-				factor = (hit.dist-2.f*pa->size)*sqrt(3.f) / 3.f;
+				factor = (hit.dist-1.f*pa->size)*sqrt(3.f) / 3.f;
 
 			pa->state.co[0] -= factor;
 			pa->state.co[1] += factor;
@@ -207,7 +210,7 @@ static void split_positions(ParticleSimulationData *sim, ParticleData *pa, int n
 
 			i = split_through_wall_test(sim, &test_pa, &hit);
 			if(i)
-				factor = (hit.dist-2.f*pa->size)*sqrt(3.f) / 3.f;
+				factor = (hit.dist-1.f*pa->size)*sqrt(3.f) / 3.f;
 
 			pa->state.co[0] -= factor;
 			pa->state.co[1] -= factor;
@@ -224,7 +227,7 @@ static void split_positions(ParticleSimulationData *sim, ParticleData *pa, int n
 
 			i = split_through_wall_test(sim, &test_pa, &hit);
 			if(i)
-				factor = (hit.dist-2.f*pa->size)*sqrt(3.f) / 3.f;
+				factor = (hit.dist-1.f*pa->size)*sqrt(3.f) / 3.f;
 
 			pa->state.co[0] += factor;
 			pa->state.co[1] -= factor;
@@ -241,7 +244,7 @@ static void split_positions(ParticleSimulationData *sim, ParticleData *pa, int n
 
 			i = split_through_wall_test(sim, &test_pa, &hit);
 			if(i)
-				factor = (hit.dist-2.f*pa->size)*sqrt(3.f) / 3.f;
+				factor = (hit.dist-1.f*pa->size)*sqrt(3.f) / 3.f;
 
 			pa->state.co[0] -= factor;
 			pa->state.co[1] += factor;
@@ -267,10 +270,13 @@ void BPH_sph_split_particle(ParticleSimulationData *sim, int index, float cfra)
 
 	pa = psys->particles+index;
 
-	/* Split particles in predefined box */
-	if((pa->state.co[2] >= -0.5 || pa->state.co[2] <= -0.6) ||
-	   (pa->state.co[1] <= 0.4 || pa->state.co[1] >= 0.7) ||
-	   (pa->state.co[0] >= -0.5 || pa->state.co[0] <= -0.6))
+	/* Split particles in predefined box *//*
+	if((pa->state.co[2] >= -0.94 || pa->state.co[2] <= -1.0) ||
+	   (pa->state.co[1] <= 0.0 || pa->state.co[1] >= 0.05) ||
+	   (pa->state.co[0] >= -0.48 || pa->state.co[0] <= -0.52))
+		return;*/
+
+	if(pa->state.co[2] > -0.8)
 		return;
 
 	if(pa->split == PARS_UNSPLIT){

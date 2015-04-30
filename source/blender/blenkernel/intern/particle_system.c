@@ -2910,7 +2910,7 @@ static void dynamics_step(ParticleSimulationData *sim, float cfra)
 
 			  /* Particle splitting*/
   #if 1
-			  if (cfra > 7 && cfra < 9) {
+			  if (cfra > 10 && cfra < 12) {
 				  LOOP_DYNAMIC_PARTICLES{
 					  BPH_sph_split_particle(sim, p, cfra);
 				  }
