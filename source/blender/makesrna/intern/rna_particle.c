@@ -1103,6 +1103,14 @@ static int rna_ParticleDupliWeight_name_length(PointerRNA *ptr)
 	return strlen(tstr);
 }
 
+static void rna_SPH_density(struct ParticleSystem *part, ReportList *reports, float point[3], float *r_density) {
+	if (part->part->fluid == NULL) {
+		BKE_reportf(reports, RPT_ERROR, "Particle system '%s' has no SPH data to be sampled", part->name);
+		return;
+	}
+	*r_density = part->particles[0].sphdensity;
+}
+
 static EnumPropertyItem *rna_Particle_from_itemf(bContext *UNUSED(C), PointerRNA *UNUSED(ptr),
                                                  PropertyRNA *UNUSED(prop), bool *UNUSED(r_free))
 {
@@ -3552,6 +3560,20 @@ static void rna_def_particle_system(BlenderRNA *brna)
 	RNA_def_property_flag(prop, PROP_THICK_WRAP);
 	RNA_def_function_output(func, prop);
 
+	/* SPH field variables */
+
+	/* Density */
+	func = RNA_def_function(srna, "sph_density", "rna_SPH_density");
+	RNA_def_function_ui_description(func, "Sample the SPH density at a point");
+	RNA_def_function_flag(func, FUNC_USE_REPORTS);
+
+	/* location of point for test and max distance */
+	prop = RNA_def_float_vector(func, "point", 3, NULL, -FLT_MAX, FLT_MAX, "Sample location", "The location to sample the density field in world space", -1e4, 1e4);
+	RNA_def_property_flag(prop, PROP_REQUIRED);
+
+	prop = RNA_def_float(func, "density", 0.0f, -FLT_MAX, FLT_MAX, "", "The density at the sample location", -1e4, 1e4);
+	RNA_def_property_flag(prop, PROP_THICK_WRAP);
+	RNA_def_function_output(func, prop);
 }
 
 void RNA_def_particle(BlenderRNA *brna)
