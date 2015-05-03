@@ -1202,7 +1202,7 @@ void psys_get_pointcache_start_end(Scene *scene, ParticleSystem *psys, int *sfra
 /************************************************/
 /*			Effectors							*/
 /************************************************/
-static void psys_update_particle_bvhtree(ParticleSystem *psys, float cfra)
+void psys_update_particle_bvhtree(ParticleSystem *psys, float cfra)
 {
 	if (psys) {
 		PARTICLE_P;

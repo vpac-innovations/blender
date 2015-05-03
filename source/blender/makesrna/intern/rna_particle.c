@@ -45,6 +45,9 @@
 #include "RNA_define.h"
 #include "RNA_enum_types.h"
 
+#include "BKE_scene.h"
+#include "BPH_sph.h"
+
 #include "BLF_translation.h"
 
 #include "rna_internal.h"
@@ -1103,12 +1106,40 @@ static int rna_ParticleDupliWeight_name_length(PointerRNA *ptr)
 	return strlen(tstr);
 }
 
-static void rna_SPH_density(struct ParticleSystem *part, ReportList *reports, float point[3], float *r_density) {
-	if (part->part->fluid == NULL) {
+static void rna_SPH_density(ID *id, struct ParticleSystem *part, bContext *C, ReportList *reports, float point[3], float *r_density) {
+	SPHData sphdata;
+	ParticleSimulationData sim = {0};
+	ParticleTarget *pt;
+	Object *ob = (Object *)id;
+	float data[2];
+	float cfra;
+
+	if (part->part->phystype != PART_PHYS_FLUID) {
 		BKE_reportf(reports, RPT_ERROR, "Particle system '%s' has no SPH data to be sampled", part->name);
 		return;
 	}
-	*r_density = part->particles[0].sphdensity;
+
+	sim.ob = ob;
+	sim.psys = part;
+	sim.scene = CTX_data_scene(C);
+
+	/* Update particle trees, including targets for for fluid-fluid
+	 * interaction */
+	cfra = BKE_scene_frame_get(sim.scene);
+	psys_update_particle_bvhtree(part, cfra);
+	pt = part->targets.first;
+	for (; pt; pt=pt->next) {
+		if (pt->ob)
+			psys_update_particle_bvhtree(BLI_findlink(&pt->ob->particlesystem, pt->psys-1), cfra);
+	}
+
+	psys_sph_init(&sim, &sphdata);
+//	psys_update_particle_tree(part, BKE_scene_frame_get(sim.scene));
+
+	psys_sph_density(NULL, &sphdata, point, data);
+	*r_density = data[0];
+
+	psys_sph_finalise(&sphdata);
 }
 
 static EnumPropertyItem *rna_Particle_from_itemf(bContext *UNUSED(C), PointerRNA *UNUSED(ptr),
@@ -3565,7 +3596,7 @@ static void rna_def_particle_system(BlenderRNA *brna)
 	/* Density */
 	func = RNA_def_function(srna, "sph_density", "rna_SPH_density");
 	RNA_def_function_ui_description(func, "Sample the SPH density at a point");
-	RNA_def_function_flag(func, FUNC_USE_REPORTS);
+	RNA_def_function_flag(func, FUNC_USE_REPORTS | FUNC_USE_SELF_ID | FUNC_USE_CONTEXT);
 
 	/* location of point for test and max distance */
 	prop = RNA_def_float_vector(func, "point", 3, NULL, -FLT_MAX, FLT_MAX, "Sample location", "The location to sample the density field in world space", -1e4, 1e4);

@@ -364,7 +364,7 @@ static void sph_force_cb(void *sphdata_v, ParticleKey *state, float *force, floa
 	sphdata->pass++;
 }
 
-static void sphclassical_density_accum_cb(void *userdata, int index, float UNUSED(squared_dist))
+static void sphclassical_density_accum_cb(void *userdata, int index, float squared_dist)
 {
   SPHRangeData *pfr = (SPHRangeData *)userdata;
   ParticleData *npa = pfr->npsys->particles + index;
@@ -376,8 +376,12 @@ static void sphclassical_density_accum_cb(void *userdata, int index, float UNUSE
   /* Exclude particles that are more than 2h away. Can't use squared_dist here                  
    * because it is not accurate enough. Use current state, i.e. the output of                   
    * basic_integrate() - z0r */
-  sub_v3_v3v3(vec, npa->state.co, pfr->pa->state.co);
-  rij = len_v3(vec);
+  if (pfr->pa == NULL) {
+    rij = sqrtf(squared_dist);
+  } else {
+    sub_v3_v3v3(vec, npa->state.co, pfr->pa->state.co);
+    rij = len_v3(vec);
+  }
   rij_h = rij / pfr->h;
   if (rij_h > 2.0f)
   return;
@@ -399,7 +403,7 @@ static void sphclassical_density_accum_cb(void *userdata, int index, float UNUSE
   pfr->data[1] += q / npa->sphdensity;
 }
 
-static void sphclassical_neighbour_accum_cb(void *userdata, int index, float UNUSED(squared_dist))
+static void sphclassical_neighbour_accum_cb(void *userdata, int index, float squared_dist)
 {
   SPHRangeData *pfr = (SPHRangeData *)userdata;
   ParticleData *npa = pfr->npsys->particles + index;
@@ -412,8 +416,12 @@ static void sphclassical_neighbour_accum_cb(void *userdata, int index, float UNU
   /* Exclude particles that are more than 2h away. Can't use squared_dist here                  
    * because it is not accurate enough. Use current state, i.e. the output of                   
    * basic_integrate() - z0r */
-  sub_v3_v3v3(vec, npa->state.co, pfr->pa->state.co);
-  rij = len_v3(vec);
+  if (pfr->pa == NULL) {
+    rij = sqrtf(squared_dist);
+  } else {
+    sub_v3_v3v3(vec, npa->state.co, pfr->pa->state.co);
+    rij = len_v3(vec);
+  }
   rij_h = rij / pfr->h;
   if (rij_h > 2.0f)
     return;
@@ -539,7 +547,7 @@ static void sphclassical_force_cb(void *sphdata_v, ParticleKey *state, float *fo
 	sphdata->pass++;
 }
 
-static void psys_sph_init(ParticleSimulationData *sim, SPHData *sphdata)
+void psys_sph_init(ParticleSimulationData *sim, SPHData *sphdata)
 {
 	ParticleTarget *pt;
 	int i;
@@ -574,7 +582,7 @@ static void psys_sph_init(ParticleSimulationData *sim, SPHData *sphdata)
 
 }
 
-static void psys_sph_finalise(SPHData *sphdata)
+void psys_sph_finalise(SPHData *sphdata)
 {
 	if (sphdata->eh) {
 		BLI_edgehash_free(sphdata->eh, NULL);
@@ -583,7 +591,7 @@ static void psys_sph_finalise(SPHData *sphdata)
 }
 
 /* Sample the density field at a point in space. */
-static void psys_sph_density(BVHTree *tree, SPHData *sphdata, float co[3], float vars[2])
+void psys_sph_density(BVHTree *tree, SPHData *sphdata, float co[3], float vars[2])
 {
   ParticleSystem **psys = sphdata->psys;
   SPHFluidSettings *fluid = psys[0]->part->fluid;
@@ -596,6 +604,7 @@ static void psys_sph_density(BVHTree *tree, SPHData *sphdata, float co[3], float
   pfr.data = density;
   pfr.h = interaction_radius * sphdata->hfac;
   pfr.mass = sphdata->mass;
+  pfr.pa = NULL;
 
   sph_evaluate_func(tree, psys, co, &pfr, interaction_radius, sphdata->density_cb);
 
