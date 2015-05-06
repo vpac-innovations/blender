@@ -54,6 +54,106 @@ static ThreadRWMutex psys_bvhtree_rwlock = BLI_RWLOCK_INITIALIZER;
 
 #define PSYS_FLUID_SPRINGS_INITIAL_SIZE 256
 
+static int nearest_split(ParticleSystem *psys, int pa_index)
+{
+	ParticleData *particle = psys->particles+pa_index, *pa;
+	float h = psys->part->fluid->radius * 0.5f;
+	float min_dist = 10.f * h;
+	float dist, vec[3];
+	int index=0, p;
+
+	/* Only loop over particles appearing after current particle */
+	for(p=1; p < psys->totpart-pa_index; p++){
+		pa = particle+p;
+		if(pa->split == PARS_UNSPLIT)
+			continue;
+
+		sub_v3_v3v3(vec, particle->state.co, pa->state.co);
+		dist = len_v3(vec);
+		if(dist < min_dist){
+			min_dist = dist;
+			index = pa_index+p;
+		}
+	}
+
+	return index;
+}
+
+void BPH_sph_unsplit_particle(ParticleSimulationData *sim, int index)
+{
+	ParticleSystem *psys = sim->psys;
+	ParticleData *pa = psys->particles + index;
+	ParticleData *npa, *newpars, *new_pa;
+	float qfac = qfac = 21.0f / (256.f * (float)M_PI);
+	float h = psys->part->fluid->radius * 0.5f;
+	float mass = psys->part->mass;
+	float fac1, fac2, wma, wmb, rij_h, vec[3];
+	int oldtotpart = psys->totpart;
+	int newtotpart = oldtotpart-1;
+	int index_n;
+
+	/* Unsplit outside splitting region only */
+	if(pa->state.co[2] < -0.8 && pa->state.co[2] > -0.92)
+		return;
+
+	/* Find index of nearest split particle */
+	index_n = nearest_split(psys, index);
+	if(index_n == 0)
+		return;
+
+	npa = psys->particles+index_n;
+
+	/* Merge particles, realloc particles array */
+	/* -- Allocate new particles array */
+	newpars = MEM_callocN(newtotpart*sizeof(ParticleData), "New Particles Array");
+	new_pa = newpars+index;
+
+	/* -- Copy all particles before the one that will dissappear -> newpars */
+	memcpy(newpars, psys->particles, index_n*sizeof(ParticleData));
+	/* -- Copy all particles after the one that will dissappear -> newpars */
+	memcpy(newpars+index_n, npa+1, (newtotpart-index_n)*sizeof(ParticleData));
+
+	/* Merge the two particles */
+	/* -- Set massfac for merged particle. */
+	new_pa->sphmassfac = pa->sphmassfac+npa->sphmassfac;
+	fac1 = (npa->sphmassfac)/(new_pa->sphmassfac);
+	fac2 = (pa->sphmassfac)/(new_pa->sphmassfac);
+
+	/* -- Set position for merged particle */
+	madd_v3_v3flv3fl(new_pa->state.co, npa->state.co, fac1, pa->state.co, fac2);
+
+	/* -- Set velocity for merged particle */
+	madd_v3_v3flv3fl(new_pa->state.vel, npa->state.vel, fac1, pa->state.vel, fac2);
+
+	/* -- Set sphalpha for merged particle */
+	sub_v3_v3v3(vec, new_pa->state.co, pa->state.co);
+	rij_h = len_v3(vec)/(h * pa->sphalpha);
+	wma = pa->sphmassfac * mass * qfac / pow3f(h * pa->sphalpha) * pow4f(2.0f-rij_h) * (1.0f + 2.0f * rij_h);
+
+	sub_v3_v3v3(vec, new_pa->state.co, npa->state.co);
+	rij_h = len_v3(vec)/(h * npa->sphalpha);
+	wmb = npa->sphmassfac * mass * qfac / pow3f(h * npa->sphalpha) * pow4f(2.0f-rij_h) * (1.0f + 2.0f * rij_h);
+
+	fac1 = 21.f/(16.f * (float)M_PI * (wma + wmb));
+	new_pa->sphalpha = pow(fac1 , 1.f/3.f)/h;
+
+	/* -- Set state variables */
+	if(new_pa->sphmassfac >= 1.f)
+		new_pa->split = PARS_UNSPLIT;
+
+	/* Birth time/die time needed? */
+
+	/* -- De-allocate particles array and set psys->particles = newpars */
+	MEM_freeN(psys->particles);
+	psys_free_pdd(psys);
+
+	psys->particles = newpars;
+
+	psys->totpart = newtotpart;
+	psys->part->totpart = newtotpart;
+	psys->totunsplit += 1;
+}
+
 static int split_through_wall_test(ParticleSimulationData *sim, ParticleData *pa, BVHTreeRayHit *hit)
 {
 	ColliderCache *coll;
@@ -276,7 +376,7 @@ void BPH_sph_split_particle(ParticleSimulationData *sim, int index, float cfra)
 	   (pa->state.co[0] >= -0.48 || pa->state.co[0] <= -0.52))
 		return;*/
 
-	if(pa->state.co[2] > -0.8)
+	if(pa->state.co[2] > -0.8 || pa->state.co[2] < -0.92)
 		return;
 
 	if(pa->split == PARS_UNSPLIT){
