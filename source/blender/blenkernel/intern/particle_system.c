@@ -142,7 +142,7 @@ static int tot_particles(ParticleSystem *psys, PTCacheID *pid)
 	if (pid && psys->pointcache->flag & PTCACHE_EXTERNAL)
 		return pid->cache->totpoint;
 	else if (psys->part->distr == PART_DISTR_GRID && psys->part->from != PART_FROM_VERT)
-		return psys->part->grid_res * psys->part->grid_res * psys->part->grid_res - psys->totunexist + psys->totsplit * 8;
+		return psys->part->grid_res * psys->part->grid_res * psys->part->grid_res - psys->totunexist + psys->totsplit * 8 - psys->totunsplit;
 	else
 		return psys->part->totpart - psys->totunexist;
 }
@@ -2862,18 +2862,6 @@ static void dynamics_step(ParticleSimulationData *sim, float cfra)
 				/* rotations */
 				basic_rotate(part, pa, pa->state.time, timestep);
 			}
-
-#if 0
-			if (cfra == 50) {
-				LOOP_DYNAMIC_PARTICLES{
-					if(p==0){
-						printf("particle 0 x: %f\n", pa->state.co[0]);
-						split_particle(sim, p, cfra);
-					}
-				}
-			}
-#endif
-
 			break;
 		}
 		case PART_PHYS_BOIDS:
@@ -2908,11 +2896,21 @@ static void dynamics_step(ParticleSimulationData *sim, float cfra)
 			   * this algorithm is separated into distinct loops. */
 			  BPH_sphclassical_step(sim, dtime, cfra);
 
-			  /* Particle splitting*/
   #if 1
-			  if (cfra > 10 && cfra < 12) {
+			  /* PARTICLE SPLITTING/COALESCING */
+			  /* Adaptive resolution method based on the work of Feldman and
+			   * Bonet 2007 and Vacondio et al 2013. */
+			  if (cfra > 125 && cfra < 135){
 				  LOOP_DYNAMIC_PARTICLES{
-					  BPH_sph_split_particle(sim, p, cfra);
+					  if(pa->split == PARS_SPLIT)
+						  BPH_sph_unsplit_particle(sim, p);
+				  }
+			  }
+
+			  if (cfra > 100 && cfra < 105) {
+				  LOOP_DYNAMIC_PARTICLES{
+					  if(pa->split == PARS_UNSPLIT)
+						  BPH_sph_split_particle(sim, p, cfra);
 				  }
 			  }
   #endif

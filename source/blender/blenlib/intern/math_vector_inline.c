@@ -531,6 +531,19 @@ MINLINE void madd_v3_v3v3fl(float r[3], const float a[3], const float b[3], floa
 	r[2] = a[2] + b[2] * f;
 }
 
+MINLINE void madd_v2_v2flv2fl(float r[2], const float a[2], float f1, const float b[2], float f2)
+{
+	r[0] = a[0] * f1 + b[0] * f2;
+	r[1] = a[1] * f1 + b[1] * f2;
+}
+
+MINLINE void madd_v3_v3flv3fl(float r[3], const float a[3], float f1, const float b[3], float f2)
+{
+	r[0] = a[0] * f1 + b[0] * f2;
+	r[1] = a[1] * f1 + b[1] * f2;
+	r[2] = a[2] * f1 + b[2] * f2;
+}
+
 MINLINE void madd_v3_v3v3v3(float r[3], const float a[3], const float b[3], const float c[3])
 {
 	r[0] = a[0] + b[0] * c[0];
