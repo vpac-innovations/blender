@@ -65,7 +65,7 @@ static int nearest_split(ParticleSystem *psys, int pa_index)
 	/* Only loop over particles appearing after current particle */
 	for(p=1; p < psys->totpart-pa_index; p++){
 		pa = particle+p;
-		if(pa->split == PARS_UNSPLIT)
+		if(pa->split == PARS_UNSPLIT || pa->alive != PARS_ALIVE)
 			continue;
 
 		sub_v3_v3v3(vec, particle->state.co, pa->state.co);
@@ -79,17 +79,15 @@ static int nearest_split(ParticleSystem *psys, int pa_index)
 	return index;
 }
 
-void BPH_sph_unsplit_particle(ParticleSimulationData *sim, int index)
+void BPH_sph_unsplit_particle(ParticleSimulationData *sim, int index, float cfra)
 {
 	ParticleSystem *psys = sim->psys;
 	ParticleData *pa = psys->particles + index;
-	ParticleData *npa, *newpars, *new_pa;
+	ParticleData *npa;
 	float qfac = qfac = 21.0f / (256.f * (float)M_PI);
 	float h = psys->part->fluid->radius * 0.5f;
 	float mass = psys->part->mass;
-	float fac1, fac2, wma, wmb, rij_h, vec[3];
-	int oldtotpart = psys->totpart;
-	int newtotpart = oldtotpart-1;
+	float fac1, fac2, wma, wmb, rij_h, old_massfac, vec[3], old_co[3], old_vel[3];
 	int index_n;
 
 	/* Unsplit outside splitting region only */
@@ -103,55 +101,41 @@ void BPH_sph_unsplit_particle(ParticleSimulationData *sim, int index)
 
 	npa = psys->particles+index_n;
 
-	/* Merge particles, realloc particles array */
-	/* -- Allocate new particles array */
-	newpars = MEM_callocN(newtotpart*sizeof(ParticleData), "New Particles Array");
-	new_pa = newpars+index;
+	old_massfac = pa->sphmassfac;
+	copy_v3_v3(old_co, pa->state.co);
+	copy_v3_v3(old_vel, pa->state.vel);
 
-	/* -- Copy all particles before the one that will dissappear -> newpars */
-	memcpy(newpars, psys->particles, index_n*sizeof(ParticleData));
-	/* -- Copy all particles after the one that will dissappear -> newpars */
-	memcpy(newpars+index_n, npa+1, (newtotpart-index_n)*sizeof(ParticleData));
-
-	/* Merge the two particles */
+	/* Merge particles, kill unused particles*/
 	/* -- Set massfac for merged particle. */
-	new_pa->sphmassfac = pa->sphmassfac+npa->sphmassfac;
-	fac1 = (npa->sphmassfac)/(new_pa->sphmassfac);
-	fac2 = (pa->sphmassfac)/(new_pa->sphmassfac);
+	pa->sphmassfac += npa->sphmassfac;
+
+	fac1 = (npa->sphmassfac)/(pa->sphmassfac);
+	fac2 = old_massfac/(pa->sphmassfac);
 
 	/* -- Set position for merged particle */
-	madd_v3_v3flv3fl(new_pa->state.co, npa->state.co, fac1, pa->state.co, fac2);
+	madd_v3_v3flv3fl(pa->state.co, npa->state.co, fac1, old_co, fac2);
 
 	/* -- Set velocity for merged particle */
-	madd_v3_v3flv3fl(new_pa->state.vel, npa->state.vel, fac1, pa->state.vel, fac2);
+	madd_v3_v3flv3fl(pa->state.vel, npa->state.vel, fac1, old_vel, fac2);
 
 	/* -- Set sphalpha for merged particle */
-	sub_v3_v3v3(vec, new_pa->state.co, pa->state.co);
+	sub_v3_v3v3(vec, pa->state.co, old_co);
 	rij_h = len_v3(vec)/(h * pa->sphalpha);
-	wma = pa->sphmassfac * mass * qfac / pow3f(h * pa->sphalpha) * pow4f(2.0f-rij_h) * (1.0f + 2.0f * rij_h);
+	wma = old_massfac * mass * qfac / pow3f(h * pa->sphalpha) * pow4f(2.0f-rij_h) * (1.0f + 2.0f * rij_h);
 
-	sub_v3_v3v3(vec, new_pa->state.co, npa->state.co);
+	sub_v3_v3v3(vec, pa->state.co, npa->state.co);
 	rij_h = len_v3(vec)/(h * npa->sphalpha);
 	wmb = npa->sphmassfac * mass * qfac / pow3f(h * npa->sphalpha) * pow4f(2.0f-rij_h) * (1.0f + 2.0f * rij_h);
 
 	fac1 = 21.f/(16.f * (float)M_PI * (wma + wmb));
-	new_pa->sphalpha = pow(fac1 , 1.f/3.f)/h;
+	pa->sphalpha = pow(fac1 , 1.f/3.f)/h;
 
 	/* -- Set state variables */
-	if(new_pa->sphmassfac >= 1.f)
-		new_pa->split = PARS_UNSPLIT;
+	if(pa->sphmassfac >= 1.f)
+		pa->split = PARS_UNSPLIT;
 
-	/* Birth time/die time needed? */
-
-	/* -- De-allocate particles array and set psys->particles = newpars */
-	MEM_freeN(psys->particles);
-	psys_free_pdd(psys);
-
-	psys->particles = newpars;
-
-	psys->totpart = newtotpart;
-	psys->part->totpart = newtotpart;
-	psys->totunsplit += 1;
+	/* -- Kill other particle. */
+	npa->dietime = cfra + 0.001/((float)(psys->part->subframes + 1));
 }
 
 static int split_through_wall_test(ParticleSimulationData *sim, ParticleData *pa, BVHTreeRayHit *hit)
