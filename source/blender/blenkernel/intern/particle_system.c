@@ -2900,17 +2900,16 @@ static void dynamics_step(ParticleSimulationData *sim, float cfra)
 			  /* PARTICLE SPLITTING/COALESCING */
 			  /* Adaptive resolution method based on the work of Feldman and
 			   * Bonet 2007 and Vacondio et al 2013. */
-			  if (cfra > 200 && cfra < 250){
-				  LOOP_DYNAMIC_PARTICLES{
-					  if(pa->alive == PARS_ALIVE && pa->split == PARS_SPLIT)
-						  BPH_sph_unsplit_particle(sim, p, cfra);
-				  }
-			  }
-
-			  if (cfra > 100 && cfra < 103) {
+			  if (cfra > 100 && cfra < 150) {
 				  LOOP_DYNAMIC_PARTICLES{
 					  if(pa->alive ==PARS_ALIVE && pa->split == PARS_UNSPLIT)
 						  BPH_sph_split_particle(sim, p, cfra);
+				/*  }
+			  }
+			  if (cfra > 100 && cfra < 150){
+				  LOOP_DYNAMIC_PARTICLES{*/
+					  if(pa->alive == PARS_ALIVE && pa->sphmassfac <= 0.55f)
+						  BPH_sph_unsplit_particle(sim, p, cfra);
 				  }
 			  }
   #endif

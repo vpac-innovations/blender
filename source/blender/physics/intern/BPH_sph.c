@@ -58,14 +58,15 @@ static int nearest_split(ParticleSystem *psys, int pa_index)
 {
 	ParticleData *particle = psys->particles+pa_index, *pa;
 	float h = psys->part->fluid->radius * 0.5f;
-	float min_dist = 10.f * h;
+	float min_dist = 2.f * h;
 	float dist, vec[3];
 	int index=0, p;
 
-	/* Only loop over particles appearing after current particle */
+	/* Only loop over particles appearing after current particle
+	   This limit not necessary if particles array not being resized.*/
 	for(p=1; p < psys->totpart-pa_index; p++){
 		pa = particle+p;
-		if(pa->split == PARS_UNSPLIT || pa->alive != PARS_ALIVE)
+		if(pa->sphmassfac >= 0.55f || pa->alive != PARS_ALIVE || ((pa->state.co[2] < -0.7) && (pa->state.co[2] > -0.92)))
 			continue;
 
 		sub_v3_v3v3(vec, particle->state.co, pa->state.co);
@@ -91,7 +92,7 @@ void BPH_sph_unsplit_particle(ParticleSimulationData *sim, int index, float cfra
 	int index_n;
 
 	/* Unsplit outside splitting region only */
-	if(pa->state.co[2] < -0.8 && pa->state.co[2] > -0.92)
+	if(pa->state.co[2] < -0.7 && pa->state.co[2] > -0.92)
 		return;
 
 	/* Find index of nearest split particle */
@@ -127,13 +128,12 @@ void BPH_sph_unsplit_particle(ParticleSimulationData *sim, int index, float cfra
 	rij_h = len_v3(vec)/(h * npa->sphalpha);
 	wmb = npa->sphmassfac * mass * qfac / pow3f(h * npa->sphalpha) * pow4f(2.0f-rij_h) * (1.0f + 2.0f * rij_h);
 
-	fac1 = 21.f/(16.f * (float)M_PI * (wma + wmb));
+	fac1 = (21.f * pa->sphmassfac * mass)/(16.f * (float)M_PI * (wma + wmb));
 	pa->sphalpha = pow(fac1 , 1.f/3.f)/h;
 
 	/* -- Set state variables */
 	if(pa->sphmassfac >= 1.f)
 		pa->split = PARS_UNSPLIT;
-
 	/* -- Kill other particle. */
 	npa->dietime = cfra + 0.001/((float)(psys->part->subframes + 1));
 }
@@ -361,6 +361,9 @@ void BPH_sph_split_particle(ParticleSimulationData *sim, int index, float cfra)
 		return;*/
 
 	if(pa->state.co[2] > -0.8 || pa->state.co[2] < -0.92)
+		return;
+
+	if(psys->totsplit > 500)
 		return;
 
 	if(pa->split == PARS_UNSPLIT){
