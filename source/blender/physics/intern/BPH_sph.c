@@ -209,6 +209,15 @@ static void sph_particle_courant(SPHData *sphdata, SPHRangeData *pfr)
   }
 }
 
+static void sph_init(SPHData *sphdata) {
+	SPHFluidSettings *fluid = sphdata->psys[0]->part->fluid;
+
+	/* 4.77 is an experimentally determined density factor */
+	sphdata->rest_density = fluid->rest_density * (fluid->flag & SPH_FAC_DENSITY ? 4.77f : 1.f);
+	sphdata->stiffness = fluid->stiffness_k;
+	sphdata->stiffness_near_fac = fluid->stiffness_knear * (fluid->flag & SPH_FAC_REPULSION ? fluid->stiffness_k : 1.f);
+}
+
 static void sph_density_accum_cb(void *userdata, int index, float squared_dist)
 {
   SPHRangeData *pfr = (SPHRangeData *)userdata;
@@ -238,8 +247,13 @@ static void sph_density_accum_cb(void *userdata, int index, float squared_dist)
   if (pfr->use_size)
     q *= npa->size;
 
-  pfr->data[0] += q*q;
-  pfr->data[1] += q*q*q;
+  pfr->params.density += q*q;
+  pfr->params.near_density += q*q*q;
+}
+
+static void sph_equation_of_state(SPHData *sphdata, SPHParams *params) {
+	params->pressure =  sphdata->stiffness * (params->density - sphdata->rest_density);
+	params->near_pressure = sphdata->stiffness_near_fac * params->near_density;
 }
 
 static void sph_force_cb(void *sphdata_v, ParticleKey *state, float *force, float *UNUSED(impulse))
@@ -255,7 +269,6 @@ static void sph_force_cb(void *sphdata_v, ParticleKey *state, float *force, floa
 	EdgeHash *springhash = sphdata->eh;
 
 	float q, u, rij, dv[3];
-	float pressure, near_pressure;
 
 	float visc = fluid->viscosity_omega;
 	float stiff_visc = fluid->viscosity_beta * (fluid->flag & SPH_FAC_VISCOSITY ? fluid->viscosity_omega : 1.f);
@@ -266,34 +279,22 @@ static void sph_force_cb(void *sphdata_v, ParticleKey *state, float *force, floa
 	/* 4.0 seems to be a pretty good value */
 	float interaction_radius = fluid->radius * (fluid->flag & SPH_FAC_RADIUS ? 4.0f * pa->size : 1.0f);
 	float h = interaction_radius * sphdata->hfac;
-	float rest_density = fluid->rest_density * (fluid->flag & SPH_FAC_DENSITY ? 4.77f : 1.f); /* 4.77 is an experimentally determined density factor */
 	float rest_length = fluid->rest_length * (fluid->flag & SPH_FAC_REST_LENGTH ? 2.588f * pa->size : 1.f);
-
-	float stiffness = fluid->stiffness_k;
-	float stiffness_near_fac = fluid->stiffness_knear * (fluid->flag & SPH_FAC_REPULSION ? fluid->stiffness_k : 1.f);
 
 	ParticleData *npa;
 	float vec[3];
 	float vel[3];
 	float co[3];
-	float data[2];
-	float density, near_density;
 
 	int i, spring_index, index = pa - psys[0]->particles;
 
-	data[0] = data[1] = 0;
-	pfr.data = data;
+	pfr.params.density = pfr.params.near_density = 0.0f;
 	pfr.h = h;
 	pfr.pa = pa;
 	pfr.mass = sphdata->mass;
 
 	sph_evaluate_func( NULL, psys, state->co, &pfr, interaction_radius, sph_density_accum_cb);
-
-	density = data[0];
-	near_density = data[1];
-
-	pressure =  stiffness * (density - rest_density);
-	near_pressure = stiffness_near_fac * near_density;
+	sph_equation_of_state(sphdata, &pfr.params);
 
 	pfn = pfr.neighbors;
 	for (i=0; i<pfr.tot_neighbors; i++, pfn++) {
@@ -312,7 +313,7 @@ static void sph_force_cb(void *sphdata_v, ParticleKey *state, float *force, floa
 		copy_v3_v3(vel, npa->prev_state.vel);
 
 		/* Double Density Relaxation */
-		madd_v3_v3fl(force, vec, -(pressure + near_pressure*q)*q);
+		madd_v3_v3fl(force, vec, -(pfr.params.pressure + pfr.params.near_pressure*q)*q);
 
 		/* Viscosity */
 		if (visc > 0.f  || stiff_visc > 0.f) {
@@ -357,11 +358,20 @@ static void sph_force_cb(void *sphdata_v, ParticleKey *state, float *force, floa
 	
 	/* Artificial buoyancy force in negative gravity direction  */
 	if (fluid->buoyancy > 0.f && gravity)
-		madd_v3_v3fl(force, gravity, fluid->buoyancy * (density-rest_density));
+		madd_v3_v3fl(force, gravity, fluid->buoyancy * (pfr.params.density - sphdata->rest_density));
 
 	if (sphdata->pass == 0 && psys[0]->part->time_flag & PART_TIME_AUTOSF)
 		sph_particle_courant(sphdata, &pfr);
 	sphdata->pass++;
+}
+
+static void sphclassical_init(SPHData *sphdata) {
+	SPHFluidSettings *fluid = sphdata->psys[0]->part->fluid;
+
+	/* 4.77 is an experimentally determined density factor */
+	sphdata->rest_density = fluid->rest_density * (fluid->flag & SPH_FAC_DENSITY ? 4.77f : 1.0f);
+	/* Use speed of sound squared */
+	sphdata->stiffness = pow2f(fluid->stiffness_k);
 }
 
 static void sphclassical_density_accum_cb(void *userdata, int index, float squared_dist)
@@ -399,8 +409,7 @@ static void sphclassical_density_accum_cb(void *userdata, int index, float squar
   if (pfr->use_size)
     q *= pfr->pa->size;
 
-  pfr->data[0] += q;
-  pfr->data[1] += q / npa->sphdensity;
+  pfr->params.density += q;
 }
 
 static void sphclassical_neighbour_accum_cb(void *userdata, int index, float squared_dist)
@@ -431,6 +440,10 @@ static void sphclassical_neighbour_accum_cb(void *userdata, int index, float squ
   pfr->tot_neighbors++;
 }
 
+static void sphclassical_equation_of_state(SPHData *sphdata, SPHParams *params) {
+	params->pressure = sphdata->stiffness * (pow7f(params->density / sphdata->rest_density) - 1.0f);
+}
+
 static void sphclassical_force_cb(void *sphdata_v, ParticleKey *state, float *force, float *UNUSED(impulse))
 {
 	SPHData *sphdata = (SPHData *)sphdata_v;
@@ -439,20 +452,15 @@ static void sphclassical_force_cb(void *sphdata_v, ParticleKey *state, float *fo
 	SPHFluidSettings *fluid = psys[0]->part->fluid;
 	SPHRangeData pfr;
 	SPHNeighbor *pfn;
+	SPHParams nparams;
 	float *gravity = sphdata->gravity;
 
 	float dq, u, rij, dv[3];
-	float pressure, npressure;
 
 	float visc = fluid->viscosity_omega;
 
 	float interaction_radius;
 	float h, hinv;
-	/* 4.77 is an experimentally determined density factor */
-	float rest_density = fluid->rest_density * (fluid->flag & SPH_FAC_DENSITY ? 4.77f : 1.0f);
-
-	// Use speed of sound squared
-	float stiffness = pow2f(fluid->stiffness_k);
 
 	ParticleData *npa;
 	float vec[3];
@@ -474,8 +482,10 @@ static void sphclassical_force_cb(void *sphdata_v, ParticleKey *state, float *fo
 
 	sph_evaluate_func(NULL, psys, state->co, &pfr, interaction_radius, sphclassical_neighbour_accum_cb);
 
-	/* Equation of state: convert density to pressure. */
-	pressure =  stiffness * (pow7f(pa->sphdensity / rest_density) - 1.0f);
+	/* Calculate pressure from density. Density is calculated in a preceding
+	 * loop, so it has to be fetched here. */
+	pfr.params.density = pa->sphdensity;
+	sphclassical_equation_of_state(sphdata, &pfr.params);
 
 	/* multiply by mass so that we return a force, not accel */
 	qfac2 *= sphdata->mass / pow3f(pfr.h);
@@ -500,7 +510,8 @@ static void sphclassical_force_cb(void *sphdata_v, ParticleKey *state, float *fo
 			continue;
 
 		/* Equation of state: convert density of neighbor to pressure. */
-		npressure = stiffness * (pow7f(npa->sphdensity / rest_density) - 1.0f);
+		nparams.density = npa->sphdensity;
+		sphclassical_equation_of_state(sphdata, &nparams);
 
 		/* First derivative of smoothing factor. Utilise the Wendland kernel
 		 * (see above).
@@ -517,7 +528,8 @@ static void sphclassical_force_cb(void *sphdata_v, ParticleKey *state, float *fo
 		if (pfn->psys->part->flag & PART_SIZEMASS)
 			dq *= npa->size;
 
-		pressureTerm = pressure / pow2f(pa->sphdensity) + npressure / pow2f(npa->sphdensity);
+		pressureTerm = (pfr.params.pressure / pow2f(pfr.params.density) +
+		                nparams.pressure / pow2f(nparams.density));
 
 		/* Apply pressure of neighbor (scalar) as a force (vector). The
 		 * total force is found by summing over all neighboring particles.
@@ -533,14 +545,14 @@ static void sphclassical_force_cb(void *sphdata_v, ParticleKey *state, float *fo
 			sub_v3_v3v3(dv, npa->prev_state.vel, pa->prev_state.vel);
 			u = dot_v3v3(vec, dv);
 			/* Apply parameters */
-			u *= -dq * hinv * visc / (0.5f * npa->sphdensity + 0.5f * pa->sphdensity);
+			u *= -dq * hinv * visc / (0.5f * nparams.density + 0.5f * pfr.params.density);
 			madd_v3_v3fl(force, vec, u);
 		}
 	}
 
 	/* Artificial buoyancy force in negative gravity direction  */
 	if (fluid->buoyancy > 0.f && gravity)
-		madd_v3_v3fl(force, gravity, fluid->buoyancy * (pa->sphdensity - rest_density));
+		madd_v3_v3fl(force, gravity, fluid->buoyancy * (pfr.params.density - sphdata->rest_density));
 
 	if (sphdata->pass == 0 && psys[0]->part->time_flag & PART_TIME_AUTOSF)
 		sph_particle_courant(sphdata, &pfr);
@@ -569,17 +581,22 @@ void psys_sph_init(ParticleSimulationData *sim, SPHData *sphdata)
 	sphdata->mass = 1.0f;
 
 	if (sim->psys->part->fluid->solver == SPH_SOLVER_DDR) {
+		sphdata->init = sph_init;
 		sphdata->force_cb = sph_force_cb;
 		sphdata->density_cb = sph_density_accum_cb;
+		sphdata->equation_of_state = sph_equation_of_state;
 		sphdata->hfac = 1.0f;
 	}
 	else {
 		/* SPH_SOLVER_CLASSICAL */
+		sphdata->init = sphclassical_init;
 		sphdata->force_cb = sphclassical_force_cb;
 		sphdata->density_cb = sphclassical_density_accum_cb;
+		sphdata->equation_of_state = sphclassical_equation_of_state;
 		sphdata->hfac = 0.5f;
 	}
 
+	sphdata->init(sphdata);
 }
 
 void psys_sph_finalise(SPHData *sphdata)
@@ -591,25 +608,25 @@ void psys_sph_finalise(SPHData *sphdata)
 }
 
 /* Sample the density field at a point in space. */
-void psys_sph_density(BVHTree *tree, SPHData *sphdata, float co[3], float vars[2])
+void psys_sph_density(BVHTree *tree, SPHData *sphdata, float co[3], float *r_density, float *r_pressure)
 {
   ParticleSystem **psys = sphdata->psys;
   SPHFluidSettings *fluid = psys[0]->part->fluid;
   /* 4.0 seems to be a pretty good value */
   float interaction_radius  = fluid->radius * (fluid->flag & SPH_FAC_RADIUS ? 4.0f * psys[0]->part->size : 1.0f);
   SPHRangeData pfr;
-  float density[2];
 
-  density[0] = density[1] = 0.0f;
-  pfr.data = density;
+  pfr.params.density = pfr.params.near_density = 0.0f;
+  pfr.params.pressure = pfr.params.near_pressure = 0.0f;
   pfr.h = interaction_radius * sphdata->hfac;
   pfr.mass = sphdata->mass;
   pfr.pa = NULL;
 
   sph_evaluate_func(tree, psys, co, &pfr, interaction_radius, sphdata->density_cb);
+  sphdata->equation_of_state(sphdata, &pfr.params);
 
-  vars[0] = pfr.data[0];
-  vars[1] = pfr.data[1];
+  *r_density = pfr.params.density;
+  *r_pressure = pfr.params.pressure;
 }
 
 static void sphclassical_calc_dens(ParticleData *pa, float UNUSED(dfra), SPHData *sphdata)
@@ -619,18 +636,14 @@ static void sphclassical_calc_dens(ParticleData *pa, float UNUSED(dfra), SPHData
   /* 4.0 seems to be a pretty good value */
   float interaction_radius  = fluid->radius * (fluid->flag & SPH_FAC_RADIUS ? 4.0f * psys[0]->part->size : 1.0f);
   SPHRangeData pfr;
-  float data[2];
 
-  data[0] = 0;
-  data[1] = 0;
-  pfr.data = data;
+  pfr.params.density = 0.0f;
   pfr.h = interaction_radius * sphdata->hfac;
   pfr.pa = pa;
   pfr.mass = sphdata->mass;
 
   sph_evaluate_func( NULL, psys, pa->state.co, &pfr, interaction_radius, sphclassical_density_accum_cb);
-  pa->sphdensity = MIN2(MAX2(data[0], fluid->rest_density * 0.9f), fluid->rest_density * 1.1f);
-
+  pa->sphdensity = MIN2(MAX2(pfr.params.density, fluid->rest_density * 0.9f), fluid->rest_density * 1.1f);
 }
 
 static void sph_integrate(ParticleSimulationData *sim, ParticleData *pa, float dfra, SPHData *sphdata)
