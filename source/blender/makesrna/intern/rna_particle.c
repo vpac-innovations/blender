@@ -1106,8 +1106,9 @@ static int rna_ParticleDupliWeight_name_length(PointerRNA *ptr)
 	return strlen(tstr);
 }
 
-static void rna_SPH_density(ID *id, struct ParticleSystem *part, bContext *C, ReportList *reports, float point[3], float *r_density, float *r_pressure) {
+static void rna_SPH_sample(ID *id, struct ParticleSystem *part, bContext *C, ReportList *reports, float point[3], float *r_density, float *r_pressure) {
 	SPHData sphdata;
+	SPHParams params;
 	ParticleSimulationData sim = {0};
 	ParticleTarget *pt;
 	Object *ob = (Object *)id;
@@ -1135,7 +1136,9 @@ static void rna_SPH_density(ID *id, struct ParticleSystem *part, bContext *C, Re
 	psys_sph_init(&sim, &sphdata);
 //	psys_update_particle_tree(part, BKE_scene_frame_get(sim.scene));
 
-	psys_sph_density(NULL, &sphdata, point, r_density, r_pressure);
+	psys_sph_sample(NULL, &sphdata, point, &params);
+	*r_density = params.density;
+	*r_pressure = params.pressure;
 
 	psys_sph_finalise(&sphdata);
 }
@@ -3592,8 +3595,8 @@ static void rna_def_particle_system(BlenderRNA *brna)
 	/* SPH field variables */
 
 	/* Density */
-	func = RNA_def_function(srna, "sph_density", "rna_SPH_density");
-	RNA_def_function_ui_description(func, "Sample the SPH density at a point");
+	func = RNA_def_function(srna, "sph_sample", "rna_SPH_sample");
+	RNA_def_function_ui_description(func, "Sample the SPH fields at a point");
 	RNA_def_function_flag(func, FUNC_USE_REPORTS | FUNC_USE_SELF_ID | FUNC_USE_CONTEXT);
 
 	/* location of point for test and max distance */

@@ -247,8 +247,8 @@ static void sph_density_accum_cb(void *userdata, int index, float squared_dist)
   if (pfr->use_size)
     q *= npa->size;
 
-  pfr->params.density += q*q;
-  pfr->params.near_density += q*q*q;
+  pfr->params.density += pow2f(q);
+  pfr->params.near_density += pow3f(q);
 }
 
 static void sph_equation_of_state(SPHData *sphdata, SPHParams *params) {
@@ -608,7 +608,7 @@ void psys_sph_finalise(SPHData *sphdata)
 }
 
 /* Sample the density field at a point in space. */
-void psys_sph_density(BVHTree *tree, SPHData *sphdata, float co[3], float *r_density, float *r_pressure)
+void psys_sph_sample(BVHTree *tree, SPHData *sphdata, float co[3], SPHParams *params)
 {
   ParticleSystem **psys = sphdata->psys;
   SPHFluidSettings *fluid = psys[0]->part->fluid;
@@ -624,9 +624,7 @@ void psys_sph_density(BVHTree *tree, SPHData *sphdata, float co[3], float *r_den
 
   sph_evaluate_func(tree, psys, co, &pfr, interaction_radius, sphdata->density_cb);
   sphdata->equation_of_state(sphdata, &pfr.params);
-
-  *r_density = pfr.params.density;
-  *r_pressure = pfr.params.pressure;
+  memcpy(params, &pfr.params, sizeof(SPHParams));
 }
 
 static void sphclassical_calc_dens(ParticleData *pa, float UNUSED(dfra), SPHData *sphdata)

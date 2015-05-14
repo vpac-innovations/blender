@@ -107,6 +107,6 @@ void BPH_sphclassical_step(struct ParticleSimulationData *sim, float dtime, floa
 
 void psys_sph_init(struct ParticleSimulationData *sim, SPHData *sphdata);
 void psys_sph_finalise(SPHData *sphdata);
-void psys_sph_density(struct BVHTree *tree, SPHData *sphdata, float co[3], float *density, float *pressure);
+void psys_sph_sample(struct BVHTree *tree, SPHData *sphdata, float co[3], SPHParams *params);
 
 #endif
