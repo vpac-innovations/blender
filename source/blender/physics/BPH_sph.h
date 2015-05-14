@@ -48,11 +48,18 @@ typedef struct SPHNeighbor {
   int index;
 } SPHNeighbor;
 
+typedef struct SPHParams {
+	float density;
+	float near_density;
+	float pressure;
+	float near_pressure;
+} SPHParams;
+
 typedef struct SPHRangeData {
   SPHNeighbor neighbors[SPH_NEIGHBORS];
   int tot_neighbors;
 
-  float* data;
+  SPHParams params;
 
   ParticleSystem *npsys;
   ParticleData *pa;
@@ -70,6 +77,13 @@ typedef struct SPHData {
   struct EdgeHash *eh;
   float *gravity;
   float hfac;
+
+  /* Some parameters are needed for the equation of state. These are set in the
+   * init callback. */
+  float rest_density;
+  float stiffness;
+  float stiffness_near_fac;
+
   /* Average distance to neighbours (other particles in the support domain),
    * for calculating the Courant number (adaptive time step). */
   int pass;
@@ -77,16 +91,22 @@ typedef struct SPHData {
   float flow[3];
 
   /* Integrator callbacks. This allows different SPH implementations. */
+  void (*init) (struct SPHData *sphdata);
   void (*force_cb) (void *sphdata_v, ParticleKey *state, float *force, float *impulse);
   void (*density_cb) (void *rangedata_v, int index, float squared_dist);
+  void (*equation_of_state) (struct SPHData *sphdata, SPHParams *params);
 } SPHData;
 
 /* General SPH functions */
 
 /* DDR SPH */
-void BPH_sphDDR_step(ParticleSimulationData *sim, float dtime, float cfra);
+void BPH_sphDDR_step(struct ParticleSimulationData *sim, float dtime, float cfra);
 
 /* Classical SPH only functions */
-void BPH_sphclassical_step(ParticleSimulationData *sim, float dtime, float cfra);
+void BPH_sphclassical_step(struct ParticleSimulationData *sim, float dtime, float cfra);
+
+void psys_sph_init(struct ParticleSimulationData *sim, SPHData *sphdata);
+void psys_sph_finalise(SPHData *sphdata);
+void psys_sph_sample(struct BVHTree *tree, SPHData *sphdata, float co[3], SPHParams *params);
 
 #endif

@@ -45,6 +45,9 @@
 #include "RNA_define.h"
 #include "RNA_enum_types.h"
 
+#include "BKE_scene.h"
+#include "BPH_sph.h"
+
 #include "BLF_translation.h"
 
 #include "rna_internal.h"
@@ -1101,6 +1104,45 @@ static int rna_ParticleDupliWeight_name_length(PointerRNA *ptr)
 	rna_ParticleDupliWeight_name_get(ptr, tstr);
 
 	return strlen(tstr);
+}
+
+static void rna_SPH_sample(ID *id, struct ParticleSystem *part, bContext *C, ReportList *reports, float point[3], float *r_density, float *r_pressure, float *r_near_density, float *r_near_pressure) {
+	SPHData sphdata;
+	SPHParams params;
+	ParticleSimulationData sim = {0};
+	ParticleTarget *pt;
+	Object *ob = (Object *)id;
+	float cfra;
+
+	if (part->part->phystype != PART_PHYS_FLUID) {
+		BKE_reportf(reports, RPT_ERROR, "Particle system '%s' has no SPH data to be sampled", part->name);
+		return;
+	}
+
+	sim.ob = ob;
+	sim.psys = part;
+	sim.scene = CTX_data_scene(C);
+
+	/* Update particle trees, including targets for for fluid-fluid
+	 * interaction */
+	cfra = BKE_scene_frame_get(sim.scene);
+	psys_update_particle_bvhtree(part, cfra);
+	pt = part->targets.first;
+	for (; pt; pt=pt->next) {
+		if (pt->ob)
+			psys_update_particle_bvhtree(BLI_findlink(&pt->ob->particlesystem, pt->psys-1), cfra);
+	}
+
+	psys_sph_init(&sim, &sphdata);
+//	psys_update_particle_tree(part, BKE_scene_frame_get(sim.scene));
+
+	psys_sph_sample(NULL, &sphdata, point, &params);
+	*r_density = params.density;
+	*r_pressure = params.pressure;
+	*r_near_density = params.near_density;
+	*r_near_pressure = params.near_pressure;
+
+	psys_sph_finalise(&sphdata);
 }
 
 static EnumPropertyItem *rna_Particle_from_itemf(bContext *UNUSED(C), PointerRNA *UNUSED(ptr),
@@ -3552,6 +3594,32 @@ static void rna_def_particle_system(BlenderRNA *brna)
 	RNA_def_property_flag(prop, PROP_THICK_WRAP);
 	RNA_def_function_output(func, prop);
 
+	/* SPH field variables */
+
+	/* Density */
+	func = RNA_def_function(srna, "sph_sample", "rna_SPH_sample");
+	RNA_def_function_ui_description(func, "Sample the SPH fields at a point");
+	RNA_def_function_flag(func, FUNC_USE_REPORTS | FUNC_USE_SELF_ID | FUNC_USE_CONTEXT);
+
+	/* location of point for test and max distance */
+	prop = RNA_def_float_vector(func, "point", 3, NULL, -FLT_MAX, FLT_MAX, "Sample location", "The location to sample the density field in world space", -1e4, 1e4);
+	RNA_def_property_flag(prop, PROP_REQUIRED);
+
+	prop = RNA_def_float(func, "density", 0.0f, -FLT_MAX, FLT_MAX, "", "The density at the sample location", -1e4, 1e4);
+	RNA_def_property_flag(prop, PROP_THICK_WRAP);
+	RNA_def_function_output(func, prop);
+
+	prop = RNA_def_float(func, "pressure", 0.0f, -FLT_MAX, FLT_MAX, "", "The pressure at the sample location", -1e4, 1e4);
+	RNA_def_property_flag(prop, PROP_THICK_WRAP);
+	RNA_def_function_output(func, prop);
+
+	prop = RNA_def_float(func, "near_density", 0.0f, -FLT_MAX, FLT_MAX, "", "The near density at the sample location (DDR only)", -1e4, 1e4);
+	RNA_def_property_flag(prop, PROP_THICK_WRAP);
+	RNA_def_function_output(func, prop);
+
+	prop = RNA_def_float(func, "near_pressure", 0.0f, -FLT_MAX, FLT_MAX, "", "The near pressure at the sample location (DDR only)", -1e4, 1e4);
+	RNA_def_property_flag(prop, PROP_THICK_WRAP);
+	RNA_def_function_output(func, prop);
 }
 
 void RNA_def_particle(BlenderRNA *brna)
