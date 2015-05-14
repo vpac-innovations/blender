@@ -1106,7 +1106,7 @@ static int rna_ParticleDupliWeight_name_length(PointerRNA *ptr)
 	return strlen(tstr);
 }
 
-static void rna_SPH_sample(ID *id, struct ParticleSystem *part, bContext *C, ReportList *reports, float point[3], float *r_density, float *r_pressure) {
+static void rna_SPH_sample(ID *id, struct ParticleSystem *part, bContext *C, ReportList *reports, float point[3], float *r_density, float *r_pressure, float *r_near_density, float *r_near_pressure) {
 	SPHData sphdata;
 	SPHParams params;
 	ParticleSimulationData sim = {0};
@@ -1139,6 +1139,8 @@ static void rna_SPH_sample(ID *id, struct ParticleSystem *part, bContext *C, Rep
 	psys_sph_sample(NULL, &sphdata, point, &params);
 	*r_density = params.density;
 	*r_pressure = params.pressure;
+	*r_near_density = params.near_density;
+	*r_near_pressure = params.near_pressure;
 
 	psys_sph_finalise(&sphdata);
 }
@@ -3608,6 +3610,14 @@ static void rna_def_particle_system(BlenderRNA *brna)
 	RNA_def_function_output(func, prop);
 
 	prop = RNA_def_float(func, "pressure", 0.0f, -FLT_MAX, FLT_MAX, "", "The pressure at the sample location", -1e4, 1e4);
+	RNA_def_property_flag(prop, PROP_THICK_WRAP);
+	RNA_def_function_output(func, prop);
+
+	prop = RNA_def_float(func, "near_density", 0.0f, -FLT_MAX, FLT_MAX, "", "The near density at the sample location (DDR only)", -1e4, 1e4);
+	RNA_def_property_flag(prop, PROP_THICK_WRAP);
+	RNA_def_function_output(func, prop);
+
+	prop = RNA_def_float(func, "near_pressure", 0.0f, -FLT_MAX, FLT_MAX, "", "The near pressure at the sample location (DDR only)", -1e4, 1e4);
 	RNA_def_property_flag(prop, PROP_THICK_WRAP);
 	RNA_def_function_output(func, prop);
 }
