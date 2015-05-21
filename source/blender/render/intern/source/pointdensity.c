@@ -20,6 +20,9 @@
  *
  * Contributors: Matt Ebb
  *
+ * Interface with SPH
+ * Copyright 2011-2012 AutoCRC
+ *
  * ***** END GPL LICENSE BLOCK *****
  */
 
@@ -54,6 +57,8 @@
 #include "DNA_texture_types.h"
 #include "DNA_particle_types.h"
 
+#include "BPH_sph.h"
+
 #include "render_types.h"
 #include "texture.h"
 #include "pointdensity.h"
@@ -64,6 +69,12 @@
 extern struct Render R;
 /* ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ */
 
+/* Data for calculating SPH density */
+typedef struct FDData {
+	struct ParticleSimulationData sim;
+	struct SPHData sphdata;
+	float density_scale;
+} FDData;
 
 static int point_data_used(PointDensity *pd)
 {
@@ -258,21 +269,22 @@ static void pointdensity_cache_object(Render *re, PointDensity *pd, Object *ob)
 	
 	BLI_bvhtree_balance(pd->point_tree);
 	dm->release(dm);
-
 }
+
+static void free_pointdensity(Render *re, Tex *tex);
+
 void cache_pointdensity(Render *re, Tex *tex)
 {
 	PointDensity *pd = tex->pd;
+	FDData *fddata;
 	
 	if (!pd)
 		return;
 
-	if (pd->point_tree) {
-		BLI_bvhtree_free(pd->point_tree);
-		pd->point_tree = NULL;
-	}
-	
-	if (pd->source == TEX_PD_PSYS) {
+	if (pd->point_tree)
+		free_pointdensity(re, tex);
+
+	if (pd->source == TEX_PD_PSYS || pd->source == TEX_PD_SPH) {
 		Object *ob = pd->object;
 		ParticleSystem *psys;
 
@@ -282,6 +294,21 @@ void cache_pointdensity(Render *re, Tex *tex)
 		if (!psys) return;
 		
 		pointdensity_cache_psys(re, pd, ob, psys);
+
+		/* If the particle system is not SPH, don't initialise the SPH code.
+		 * This will result in all samples being calculated as zero. See
+		 * density_sample_sph() - z0r */
+		if (pd->source == TEX_PD_SPH &&
+				psys->part->phystype == PART_PHYS_FLUID &&
+				psys->part->fluid != NULL) {
+			fddata = MEM_callocN(sizeof(FDData), "Point density fluid_data");
+			fddata->sim.scene = re->scene;
+			fddata->sim.ob = ob;
+			fddata->sim.psys = psys;
+			fddata->density_scale = 1.0f / psys->part->fluid->rest_density;
+			pd->fluid_data = fddata;
+			psys_sph_init(&(fddata->sim), &(fddata->sphdata));
+		}
 	}
 	else if (pd->source == TEX_PD_OBJECT) {
 		Object *ob = pd->object;
@@ -306,6 +333,12 @@ static void free_pointdensity(Render *UNUSED(re), Tex *tex)
 		pd->point_data = NULL;
 	}
 	pd->totpoints = 0;
+
+	if (pd->fluid_data) {
+		psys_sph_finalise(&(((FDData*)pd->fluid_data)->sphdata));
+		MEM_freeN(pd->fluid_data);
+		pd->fluid_data = NULL;
+	}
 }
 
 
@@ -423,6 +456,8 @@ static void init_pointdensityrangedata(PointDensity *pd, PointDensityRangeData *
 	pdr->velscale = velscale;
 }
 
+static void density_sample(PointDensity *pd, float *co, float *density, float *age, float *vec);
+static void density_sample_sph(PointDensity *pd, float *co, float *density, float *age, float *vec);
 
 int pointdensitytex(Tex *tex, const float texvec[3], TexResult *texres)
 {
@@ -433,10 +468,10 @@ int pointdensitytex(Tex *tex, const float texvec[3], TexResult *texres)
 	float vec[3] = {0.0f, 0.0f, 0.0f}, co[3];
 	float col[4];
 	float turb, noise_fac;
-	int num=0;
+	int color_source;
 	
 	texres->tin = 0.0f;
-	
+
 	if ((!pd) || (!pd->point_tree))
 		return 0;
 		
@@ -447,15 +482,12 @@ int pointdensitytex(Tex *tex, const float texvec[3], TexResult *texres)
 	copy_v3_v3(co, texvec);
 	
 	if (point_data_used(pd)) {
-		/* does a BVH lookup to find accumulated density and additional point data *
-		 * stores particle velocity vector in 'vec', and particle lifetime in 'time' */
-		num = BLI_bvhtree_range_query(pd->point_tree, co, pd->radius, accum_density, &pdr);
-		if (num > 0) {
-			age /= num;
-			mul_v3_fl(vec, 1.0f/num);
-		}
+		if (pd->source == TEX_PD_SPH)
+			density_sample_sph(pd, co, &density, &age, vec);
+		else
+			density_sample(pd, co, &density, &age, vec);
 		
-		/* reset */
+		/* reset - we're only interested in age for turbulence */
 		density = vec[0] = vec[1] = vec[2] = 0.0f;
 	}
 	
@@ -481,12 +513,11 @@ int pointdensitytex(Tex *tex, const float texvec[3], TexResult *texres)
 		co[2] = texvec[2] + noise_fac * turb;
 	}
 
-	/* BVH query with the potentially perturbed coordinates */
-	num = BLI_bvhtree_range_query(pd->point_tree, co, pd->radius, accum_density, &pdr);
-	if (num > 0) {
-		age /= num;
-		mul_v3_fl(vec, 1.0f/num);
-	}
+	/* query again with the potentially perturbed coordinates */
+	if (pd->source == TEX_PD_SPH)
+		density_sample_sph(pd, co, &density, &age, vec);
+	else
+		density_sample(pd, co, &density, &age, vec);
 	
 	texres->tin = density;
 	BRICONT;
@@ -496,7 +527,13 @@ int pointdensitytex(Tex *tex, const float texvec[3], TexResult *texres)
 	
 	retval |= TEX_RGB;
 	
-	switch (pd->color_source) {
+	/* SPH density doesn't support color yet. */
+	if (pd->source == TEX_PD_SPH)
+		color_source = TEX_PD_COLOR_CONSTANT;
+	else
+		color_source = pd->color_source;
+
+	switch (color_source) {
 		case TEX_PD_COLOR_PARTAGE:
 			if (pd->coba) {
 				if (do_colorband(pd->coba, age, col)) {
@@ -541,4 +578,43 @@ int pointdensitytex(Tex *tex, const float texvec[3], TexResult *texres)
 		texres->nor[0] = texres->nor[1] = texres->nor[2] = 0.0f;
 	}
 #endif
+}
+
+/* does a BVH lookup to find accumulated density and additional point data *
+ * stores particle velocity vector in 'vec', and particle lifetime in 'age' */
+static void density_sample(PointDensity *pd, float *co, float *density, float *age, float *vec)
+{
+	PointDensityRangeData pdr;
+	int num;
+
+	if (!pd->point_tree)
+		return;
+
+	init_pointdensityrangedata(pd, &pdr, density, vec, age,
+		(pd->flag&TEX_PD_FALLOFF_CURVE ? pd->falloff_curve : NULL), pd->falloff_speed_scale*0.001f);
+
+	num = BLI_bvhtree_range_query(pd->point_tree, co, pd->radius, accum_density, &pdr);
+	if (num > 0) {
+		*age /= num;
+		mul_v3_fl(vec, 1.0f/num);
+	}
+}
+
+/* Uses particle system API to query SPH field variables */
+static void density_sample_sph(PointDensity *pd, float *co, float *density, float *UNUSED(age), float *UNUSED(vec))
+{
+	FDData *fddata;
+	SPHParams params;
+
+	/* If the particle system is not SPH, this will be NULL. */
+	if (!pd->fluid_data)
+		return;
+
+	fddata = (FDData*) pd->fluid_data;
+	psys_sph_sample(pd->point_tree, &(fddata->sphdata), co, &params);
+
+	/* Scale such that result = 1.0 when density = rest density. */
+	*density = params.density * fddata->density_scale;
+
+	return;
 }

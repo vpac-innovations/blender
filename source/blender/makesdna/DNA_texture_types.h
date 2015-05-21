@@ -153,6 +153,7 @@ typedef struct PointDensity {
 	short psys_cache_space;		/* cache points in worldspace, object space, ... ? */
 	short ob_cache_space;		/* cache points in worldspace, object space, ... ? */
 	
+	void *fluid_data;		/* Extra data for SPH density mode */
 	void *point_tree;		/* the acceleration tree containing points */
 	float *point_data;		/* dynamically allocated extra for extra information, like particle age */
 	
@@ -254,6 +255,7 @@ typedef struct Tex {
 	struct EnvMap *env;
 	struct PreviewImage *preview;
 	struct PointDensity *pd;
+	struct FluidDensity *fd;
 	struct VoxelData *vd;
 	struct OceanTex *ot;
 	
@@ -566,6 +568,7 @@ enum {
 #define TEX_PD_PSYS			0
 #define TEX_PD_OBJECT		1
 #define TEX_PD_FILE			2
+#define TEX_PD_SPH			3
 
 /* falloff_type */
 #define TEX_PD_FALLOFF_STD		0

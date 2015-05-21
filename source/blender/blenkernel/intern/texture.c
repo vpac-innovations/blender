@@ -1476,6 +1476,7 @@ PointDensity *BKE_add_pointdensity(void)
 	pd->falloff_type = TEX_PD_FALLOFF_STD;
 	pd->falloff_softness = 2.0;
 	pd->source = TEX_PD_PSYS;
+	pd->fluid_data = NULL;
 	pd->point_tree = NULL;
 	pd->point_data = NULL;
 	pd->noise_size = 0.5f;
@@ -1503,6 +1504,7 @@ PointDensity *BKE_copy_pointdensity(PointDensity *pd)
 	PointDensity *pdn;
 
 	pdn = MEM_dupallocN(pd);
+	pdn->fluid_data = NULL;
 	pdn->point_tree = NULL;
 	pdn->point_data = NULL;
 	if (pdn->coba) pdn->coba = MEM_dupallocN(pdn->coba);
@@ -1519,6 +1521,10 @@ void BKE_free_pointdensitydata(PointDensity *pd)
 	if (pd->point_data) {
 		MEM_freeN(pd->point_data);
 		pd->point_data = NULL;
+	}
+	if (pd->fluid_data) {
+		MEM_freeN(pd->fluid_data);
+		pd->fluid_data = NULL;
 	}
 	if (pd->coba) {
 		MEM_freeN(pd->coba);

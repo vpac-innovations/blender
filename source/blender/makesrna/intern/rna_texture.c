@@ -1640,6 +1640,7 @@ static void rna_def_texture_pointdensity(BlenderRNA *brna)
 		{TEX_PD_PSYS, "PARTICLE_SYSTEM", 0, "Particle System", "Generate point density from a particle system"},
 		{TEX_PD_OBJECT, "OBJECT", 0, "Object Vertices", "Generate point density from an object's vertices"},
 		/*{TEX_PD_FILE, "FILE", 0, "File", ""}, */
+		{TEX_PD_SPH, "SPH", 0, "Fluid Particles", "Use intrinsic particle fluid density"},
 		{0, NULL, 0, NULL, NULL}
 	};
 	

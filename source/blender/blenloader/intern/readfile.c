@@ -3522,6 +3522,7 @@ static void direct_link_texture(FileData *fd, Tex *tex)
 	}
 	tex->pd = newdataadr(fd, tex->pd);
 	if (tex->pd) {
+		tex->pd->fluid_data = NULL;
 		tex->pd->point_tree = NULL;
 		tex->pd->coba = newdataadr(fd, tex->pd->coba);
 		tex->pd->falloff_curve = newdataadr(fd, tex->pd->falloff_curve);

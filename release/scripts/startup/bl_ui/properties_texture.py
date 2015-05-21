@@ -813,7 +813,7 @@ class TEXTURE_PT_pointdensity(TextureButtonsPanel, Panel):
         split = layout.split()
 
         col = split.column()
-        if pd.point_source == 'PARTICLE_SYSTEM':
+        if pd.point_source in {'PARTICLE_SYSTEM', 'SPH'}:
             col.label(text="Object:")
             col.prop(pd, "object", text="")
 
@@ -840,7 +840,10 @@ class TEXTURE_PT_pointdensity(TextureButtonsPanel, Panel):
             if pd.color_source in {'PARTICLE_SPEED', 'PARTICLE_AGE'}:
                 layout.template_color_ramp(pd, "color_ramp", expand=True)
 
+        # Falloff properties. Note that this is not supported by the SPH mode,
+        # because SPH defines its own falloff curve.
         col = split.column()
+        col.enabled = pd.point_source != 'SPH'
         col.label()
         col.prop(pd, "radius")
         col.label(text="Falloff:")
