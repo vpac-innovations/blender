@@ -145,8 +145,9 @@ typedef struct PointDensity {
 	short source;
 	short color_source;
 	int totpoints;
-	
-	int pdpad;
+	short sph_variable;
+
+	short pdpad;
 
 	struct Object *object;	/* for 'Object' or 'Particle system' type - source object */
 	int psys;				/* index+1 in ob.particlesystem, non-ID pointer not allowed */
@@ -599,6 +600,12 @@ enum {
 #define TEX_PD_COLOR_PARTAGE	1
 #define TEX_PD_COLOR_PARTSPEED	2
 #define TEX_PD_COLOR_PARTVEL	3
+
+/* SPH field variable */
+#define TEX_PD_SPH_DENSITY			0
+#define TEX_PD_SPH_PRESSURE			1
+#define TEX_PD_SPH_NEAR_DENSITY		2
+#define TEX_PD_SPH_NEAR_PRESSURE	3
 
 #define POINT_DATA_VEL		1
 #define POINT_DATA_LIFE		2

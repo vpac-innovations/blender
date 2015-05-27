@@ -126,6 +126,13 @@ MINLINE float interpf(float target, float origin, float fac)
 	return (fac * target) + (1.0f - fac) * origin;
 }
 
+/* Inverse of interpf; finds interpolation factor for a known value.
+ * Returns 0.0 when value == origin, and 1.0 when value == target.
+ * This is also the 1D analog of line_point_factor_v2. */
+MINLINE float rescalef(float target, float origin, float value) {
+	return (value - origin) / (target - origin);
+}
+
 /* used for zoom values*/
 MINLINE float power_of_2(float val)
 {

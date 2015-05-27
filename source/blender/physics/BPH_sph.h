@@ -95,6 +95,7 @@ typedef struct SPHData {
   void (*force_cb) (void *sphdata_v, ParticleKey *state, float *force, float *impulse);
   void (*density_cb) (void *rangedata_v, int index, float squared_dist);
   void (*equation_of_state) (struct SPHData *sphdata, SPHParams *params);
+  void (*params_rest) (struct SPHData *sphdata, SPHParams *params);
 } SPHData;
 
 /* General SPH functions */
@@ -108,5 +109,6 @@ void BPH_sphclassical_step(struct ParticleSimulationData *sim, float dtime, floa
 void psys_sph_init(struct ParticleSimulationData *sim, SPHData *sphdata);
 void psys_sph_finalise(SPHData *sphdata);
 void psys_sph_sample(struct BVHTree *tree, SPHData *sphdata, float co[3], SPHParams *params);
+void psys_sph_scale(SPHData *sphdata, SPHParams *params_zero, SPHParams *params_rest);
 
 #endif

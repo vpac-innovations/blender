@@ -1689,6 +1689,16 @@ static void rna_def_texture_pointdensity(BlenderRNA *brna)
 		{0, NULL, 0, NULL, NULL}
 	};
 	
+	static EnumPropertyItem sph_variable_items[] = {
+	    {TEX_PD_SPH_DENSITY, "DENSITY", 0, "Density", "The fluid density"},
+	    {TEX_PD_SPH_PRESSURE, "PRESSURE", 0, "Pressure", "The fluid pressure"},
+	    {TEX_PD_SPH_NEAR_DENSITY, "NEAR_DENSITY", 0, "Near Density",
+	                              "The near density (Double Density solver only)"},
+	    {TEX_PD_SPH_NEAR_PRESSURE, "NEAR_PRESSURE", 0, "Near Pressure",
+	                              "The near pressure (Double Density solver only)"},
+		{0, NULL, 0, NULL, NULL}
+	};
+	
 	srna = RNA_def_struct(brna, "PointDensity", NULL);
 	RNA_def_struct_sdna(srna, "PointDensity");
 	RNA_def_struct_ui_text(srna, "PointDensity", "Point density settings");
@@ -1777,6 +1787,12 @@ static void rna_def_texture_pointdensity(BlenderRNA *brna)
 	prop = RNA_def_property(srna, "use_falloff_curve", PROP_BOOLEAN, PROP_NONE);
 	RNA_def_property_boolean_sdna(prop, NULL, "flag", TEX_PD_FALLOFF_CURVE);
 	RNA_def_property_ui_text(prop, "Falloff Curve", "Use a custom falloff curve");
+	RNA_def_property_update(prop, 0, "rna_Texture_update");
+	
+	prop = RNA_def_property(srna, "sph_variable", PROP_ENUM, PROP_NONE);
+	RNA_def_property_enum_sdna(prop, NULL, "sph_variable");
+	RNA_def_property_enum_items(prop, sph_variable_items);
+	RNA_def_property_ui_text(prop, "SPH Variable", "The SPH variable to sample");
 	RNA_def_property_update(prop, 0, "rna_Texture_update");
 
 	/* Turbulence */

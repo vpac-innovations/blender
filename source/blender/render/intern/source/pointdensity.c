@@ -73,7 +73,8 @@ extern struct Render R;
 typedef struct FDData {
 	struct ParticleSimulationData sim;
 	struct SPHData sphdata;
-	float density_scale;
+	struct SPHParams params_zero;
+	struct SPHParams params_rest;
 } FDData;
 
 static int point_data_used(PointDensity *pd)
@@ -305,9 +306,9 @@ void cache_pointdensity(Render *re, Tex *tex)
 			fddata->sim.scene = re->scene;
 			fddata->sim.ob = ob;
 			fddata->sim.psys = psys;
-			fddata->density_scale = 1.0f / psys->part->fluid->rest_density;
 			pd->fluid_data = fddata;
 			psys_sph_init(&(fddata->sim), &(fddata->sphdata));
+			psys_sph_scale(&(fddata->sphdata), &(fddata->params_zero), &(fddata->params_rest));
 		}
 	}
 	else if (pd->source == TEX_PD_OBJECT) {
@@ -601,7 +602,7 @@ static void density_sample(PointDensity *pd, float *co, float *density, float *a
 }
 
 /* Uses particle system API to query SPH field variables */
-static void density_sample_sph(PointDensity *pd, float *co, float *density, float *UNUSED(age), float *UNUSED(vec))
+static void density_sample_sph(PointDensity *pd, float *co, float *value, float *UNUSED(age), float *UNUSED(vec))
 {
 	FDData *fddata;
 	SPHParams params;
@@ -613,8 +614,24 @@ static void density_sample_sph(PointDensity *pd, float *co, float *density, floa
 	fddata = (FDData*) pd->fluid_data;
 	psys_sph_sample(pd->point_tree, &(fddata->sphdata), co, &params);
 
-	/* Scale such that result = 1.0 when density = rest density. */
-	*density = params.density * fddata->density_scale;
+	if (pd->sph_variable == TEX_PD_SPH_DENSITY) {
+		*value = rescalef(fddata->params_rest.density,
+		                  fddata->params_zero.density,
+		                  params.density);
+	} else if (pd->sph_variable == TEX_PD_SPH_PRESSURE) {
+		*value = rescalef(fddata->params_rest.pressure,
+		                  fddata->params_zero.pressure,
+		                  params.pressure);
+	} else if (pd->sph_variable == TEX_PD_SPH_NEAR_DENSITY) {
+		*value = rescalef(fddata->params_rest.near_density,
+		                  fddata->params_zero.near_density,
+		                  params.near_density);
+	} else {
+		/* TEX_PD_SPH_NEAR_PRESSURE */
+		*value = rescalef(fddata->params_rest.near_pressure,
+		                  fddata->params_zero.near_pressure,
+		                  params.near_pressure);
+	}
 
 	return;
 }

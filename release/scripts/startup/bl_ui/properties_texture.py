@@ -824,6 +824,9 @@ class TEXTURE_PT_pointdensity(TextureButtonsPanel, Panel):
                 sub.prop_search(pd, "particle_system", pd.object, "particle_systems", text="")
             sub.label(text="Cache:")
             sub.prop(pd, "particle_cache_space", text="")
+
+            sub.label(text="Field Variable:")
+            sub.prop(pd, "sph_variable", text="")
         else:
             col.label(text="Object:")
             col.prop(pd, "object", text="")

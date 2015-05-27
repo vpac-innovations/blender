@@ -256,6 +256,12 @@ static void sph_equation_of_state(SPHData *sphdata, SPHParams *params) {
 	params->near_pressure = sphdata->stiffness_near_fac * params->near_density;
 }
 
+static void sph_params_rest(SPHData *sphdata, SPHParams *params) {
+	params->density = sphdata->rest_density;
+	params->near_density = sphdata->stiffness_near_fac * sphdata->rest_density;
+	sph_equation_of_state(sphdata, params);
+}
+
 static void sph_force_cb(void *sphdata_v, ParticleKey *state, float *force, float *UNUSED(impulse))
 {
 	SPHData *sphdata = (SPHData *)sphdata_v;
@@ -444,6 +450,12 @@ static void sphclassical_equation_of_state(SPHData *sphdata, SPHParams *params) 
 	params->pressure = sphdata->stiffness * (pow7f(params->density / sphdata->rest_density) - 1.0f);
 }
 
+static void sphclassical_params_rest(SPHData *sphdata, SPHParams *params) {
+	params->density = sphdata->rest_density;
+	params->near_density = sphdata->stiffness_near_fac * sphdata->rest_density;
+	sph_equation_of_state(sphdata, params);
+}
+
 static void sphclassical_force_cb(void *sphdata_v, ParticleKey *state, float *force, float *UNUSED(impulse))
 {
 	SPHData *sphdata = (SPHData *)sphdata_v;
@@ -585,6 +597,7 @@ void psys_sph_init(ParticleSimulationData *sim, SPHData *sphdata)
 		sphdata->force_cb = sph_force_cb;
 		sphdata->density_cb = sph_density_accum_cb;
 		sphdata->equation_of_state = sph_equation_of_state;
+		sphdata->params_rest = sph_params_rest;
 		sphdata->hfac = 1.0f;
 	}
 	else {
@@ -593,6 +606,7 @@ void psys_sph_init(ParticleSimulationData *sim, SPHData *sphdata)
 		sphdata->force_cb = sphclassical_force_cb;
 		sphdata->density_cb = sphclassical_density_accum_cb;
 		sphdata->equation_of_state = sphclassical_equation_of_state;
+		sphdata->params_rest = sphclassical_params_rest;
 		sphdata->hfac = 0.5f;
 	}
 
@@ -625,6 +639,30 @@ void psys_sph_sample(BVHTree *tree, SPHData *sphdata, float co[3], SPHParams *pa
   sph_evaluate_func(tree, psys, co, &pfr, interaction_radius, sphdata->density_cb);
   sphdata->equation_of_state(sphdata, &pfr.params);
   memcpy(params, &pfr.params, sizeof(SPHParams));
+}
+
+/* Set output parameters for a point of zero density, and one at rest density. */
+void psys_sph_scale(SPHData *sphdata, SPHParams *params_zero, SPHParams *params_rest)
+{
+	ParticleSystem **psys = sphdata->psys;
+	SPHFluidSettings *fluid = psys[0]->part->fluid;
+	/* 4.0 seems to be a pretty good value */
+	float interaction_radius  = fluid->radius * (fluid->flag & SPH_FAC_RADIUS ? 4.0f * psys[0]->part->size : 1.0f);
+	SPHRangeData pfr;
+
+	pfr.h = interaction_radius * sphdata->hfac;
+	pfr.mass = sphdata->mass;
+	pfr.pa = NULL;
+
+	pfr.params.density = pfr.params.near_density = 0.0f;
+	pfr.params.pressure = pfr.params.near_pressure = 0.0f;
+	sphdata->equation_of_state(sphdata, &pfr.params);
+	memcpy(params_zero, &pfr.params, sizeof(SPHParams));
+
+	pfr.params.density = pfr.params.near_density = 0.0f;
+	pfr.params.pressure = pfr.params.near_pressure = 1.0f;
+	sphdata->params_rest(sphdata, &pfr.params);
+	memcpy(params_rest, &pfr.params, sizeof(SPHParams));
 }
 
 static void sphclassical_calc_dens(ParticleData *pa, float UNUSED(dfra), SPHData *sphdata)
