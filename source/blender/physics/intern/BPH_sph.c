@@ -66,7 +66,7 @@ static int nearest_split(ParticleSystem *psys, int pa_index)
 	   This limit not necessary if particles array not being resized.*/
 	for(p=1; p < psys->totpart-pa_index; p++){
 		pa = particle+p;
-		if(pa->sphmassfac >= 0.55f || pa->alive != PARS_ALIVE || ((pa->state.co[2] < 0.025) && (pa->state.co[2] > -0.01)))
+		if(pa->sphmassfac >= 0.55f || pa->alive != PARS_ALIVE || ((pa->state.co[2] < 0.020) && (pa->state.co[2] > -0.020)))
 			continue;
 
 		sub_v3_v3v3(vec, particle->state.co, pa->state.co);
@@ -92,7 +92,7 @@ void BPH_sph_unsplit_particle(ParticleSimulationData *sim, int index, float cfra
 	int index_n;
 
 	/* Unsplit outside splitting region only */
-	if(pa->state.co[2] < 0.025 && pa->state.co[2] > -0.01)
+	if(pa->state.co[2] < 0.020 && pa->state.co[2] > -0.020)
 		return;
 
 	/* Find index of nearest split particle */
@@ -360,8 +360,10 @@ void BPH_sph_split_particle(ParticleSimulationData *sim, int index, float cfra)
 	   (pa->state.co[0] >= -0.48 || pa->state.co[0] <= -0.52))
 		return;*/
 
-	if(pa->state.co[2] > 0.025 || pa->state.co[2] < -0.01)
-		return;
+	if((pa->state.co[2] > 0.020 || pa->state.co[2] < -0.020) ||
+	   (pa->state.co[1] > 0.020 || pa->state.co[1] < -0.020) ||
+	   (pa->state.co[0] > 0.020 || pa->state.co[0] < -0.020))
+	   return;
 
 	/*if(psys->totsplit > 500)
 		return;*/

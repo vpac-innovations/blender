@@ -2262,7 +2262,7 @@ void collision_check(ParticleSimulationData *sim, int p, float dfra, float cfra)
 	copy_v3_v3(col.ve2, pa->state.vel);
 	col.f = 0.0f;
 
-	col.radius = ((part->flag & PART_SIZE_DEFL) || (part->phystype == PART_PHYS_BOIDS)) ? pa->size : COLLISION_MIN_RADIUS;
+	col.radius = ((part->flag & PART_SIZE_DEFL) || (part->phystype == PART_PHYS_BOIDS)) ? pa->size * pa->sphmassfac : COLLISION_MIN_RADIUS;
 
 	/* override for boids */
 	if (part->phystype == PART_PHYS_BOIDS && part->boids->options & BOID_ALLOW_LAND) {
@@ -2895,13 +2895,13 @@ static void dynamics_step(ParticleSimulationData *sim, float cfra)
 		    /* PARTICLE SPLITTING/COALESCING */
 		    /* Adaptive resolution method based on the work of Feldman and
 		     * Bonet 2007 and Vacondio et al 2013. */
-		    if (cfra > 0 && cfra < 2000) {
+		    if (cfra > 795 && cfra < 10000) {
 			    LOOP_DYNAMIC_PARTICLES{
 				    if(pa->alive ==PARS_ALIVE && pa->split == PARS_UNSPLIT)
 					    BPH_sph_split_particle(sim, p, cfra);
 			    }
 		    }
-		    if (cfra > 0 && cfra < 2000){
+		    if (cfra > 795 && cfra < 10000){
 			    LOOP_DYNAMIC_PARTICLES{
 				    if(pa->alive == PARS_ALIVE && pa->sphmassfac <= 0.55f)
 					    BPH_sph_unsplit_particle(sim, p, cfra);
