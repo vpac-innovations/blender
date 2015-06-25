@@ -1474,6 +1474,10 @@ static void rna_def_particle(BlenderRNA *brna)
 	RNA_def_property_float_sdna(prop, NULL, "prev_state.rot");
 	RNA_def_property_ui_text(prop, "Previous Rotation", "");
 
+	prop = RNA_def_property(srna, "sph_density", PROP_FLOAT, PROP_NONE);
+	RNA_def_property_float_sdna(prop, NULL, "sphdensity");
+	RNA_def_property_ui_text(prop, "SPH Density", "");
+
 	/* Hair & Keyed Keys */
 
 	prop = RNA_def_property(srna, "hair_keys", PROP_COLLECTION, PROP_NONE);
