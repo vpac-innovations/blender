@@ -66,7 +66,10 @@ static int nearest_split(ParticleSystem *psys, int pa_index)
 	   This limit not necessary if particles array not being resized.*/
 	for(p=1; p < psys->totpart-pa_index; p++){
 		pa = particle+p;
-		if(pa->sphmassfac >= 0.55f || pa->alive != PARS_ALIVE || ((pa->state.co[2] < 0.020) && (pa->state.co[2] > -0.020)))
+		if(pa->sphmassfac >= 0.7f || pa->alive != PARS_ALIVE ||
+		   ((pa->state.co[2] < 0.020) && (pa->state.co[2] > -0.020))&&
+		    (pa->state.co[1] < 0.020 && pa->state.co[1] > -0.020)&&
+		    (pa->state.co[0] < 0.020 && pa->state.co[0] > -0.020))
 			continue;
 
 		sub_v3_v3v3(vec, particle->state.co, pa->state.co);
@@ -92,7 +95,9 @@ void BPH_sph_unsplit_particle(ParticleSimulationData *sim, int index, float cfra
 	int index_n;
 
 	/* Unsplit outside splitting region only */
-	if(pa->state.co[2] < 0.020 && pa->state.co[2] > -0.020)
+	if((pa->state.co[2] < 0.020 && pa->state.co[2] > -0.020)&&
+	   (pa->state.co[1] < 0.020 && pa->state.co[1] > -0.020)&&
+	   (pa->state.co[0] < 0.020 && pa->state.co[0] > -0.020))
 		return;
 
 	/* Find index of nearest split particle */
@@ -160,26 +165,16 @@ static int split_through_wall_test(ParticleSimulationData *sim, ParticleData *pa
 	for(coll=colliders->first; coll; coll=coll->next){
 		current = coll->ob;
 		old_dist = hit->dist;
-		/* Create bvhtree from current object. Check last 3 args are appropriate. */
-		/* 0.0f is epsilon parameter, if 0.0f, over-written with FLT_EPSILON	  */
-		/* Next parameter is 'tree_type' not sure what that controls or how to	  */
-		/* choose it appropriately for our purpose.								  */
-		/* See BLI_bvhtree_new() for consequences of 'axis' parameter. (last par) */
-		/* Not exactly sure what that controls either.							  */
+
 		bvhtree_from_mesh_faces(&treeData, current->derivedFinal, 0.0f, 4, 6);
 
-		/* Ray cast. Not sure what comes out of this at the moment. */
+		/* Ray cast. */
 		BLI_bvhtree_ray_cast(treeData.tree, ray_start, ray_dir, pa->size, hit, treeData.raycast_callback, &treeData);
 
 		/* Throw out new hit distance if previous one was shorter. */
 		if(old_dist < hit->dist)
 			hit->dist = old_dist;
 
-		/* Free pointer to re-use? No idea if this works */
-		/* Free's memory allocated by treeData, then sets sizeof(treeData) sized  */
-		/* block of memory pointed by treeData to zero							  */
-		/* bvhtree_from_mesh_faces() relies on an if(tree == NULL) so will that   */
-		/* still work?															  */
 		free_bvhtree_from_mesh(&treeData);
 	}
 	return hit->index >= 0;
@@ -389,6 +384,70 @@ void BPH_sph_split_particle(ParticleSimulationData *sim, int index, float cfra)
 			/* Set birth time. Offset to avoid particle reset. Is this robust though?*/
 			psys -> particles[oldtotpart+i].time = cfra - 0.001/((float)(part->subframes + 1));
 		}
+		/* Update ParticleSettings->totpart.
+				  ParticleSystem->totpart? */
+		psys->part->totpart = newtotpart;
+		psys->totsplit += 1;
+	}
+}
+
+void BPH_sph_planar_split(ParticleSimulationData *sim, int index, float cfra)
+{
+	ParticleSystem *psys = sim->psys;
+	ParticleSettings *part = psys->part;
+	ParticleData *pa, *new_pa;
+	int oldtotpart = psys->totpart;
+	int newtotpart = oldtotpart+2;
+	int i;
+
+	pa = psys->particles+index;
+
+	/* Split particles in predefined box *//*
+	if((pa->state.co[2] >= -0.94 || pa->state.co[2] <= -1.0) ||
+	   (pa->state.co[1] <= 0.0 || pa->state.co[1] >= 0.05) ||
+	   (pa->state.co[0] >= -0.48 || pa->state.co[0] <= -0.52))
+		return;*/
+
+	if((pa->state.co[2] > 0.020 || pa->state.co[2] < -0.020) ||
+	   (pa->state.co[1] > 0.020 || pa->state.co[1] < -0.020) ||
+	   (pa->state.co[0] > 0.020 || pa->state.co[0] < -0.020))
+	   return;
+
+	if(pa->split == PARS_UNSPLIT){
+		/* Re-allocate particles array */
+		realloc_particles(sim, newtotpart);
+		pa = psys->particles+index;
+
+		pa->split = PARS_SPLIT;
+		pa->sphalpha = pow(1.f/3.f, 1.f/3.f);
+		pa->sphmassfac = 1.f/3.f;
+
+		/* Make copies of parent particle at end of particles array */
+		new_pa = psys->particles+oldtotpart;
+		memcpy(new_pa, pa, sizeof(ParticleData));
+
+		new_pa->state.co[0] -= (1.f/6.f)*new_pa->size;
+		new_pa->state.co[1] -= (sqrt(3.f)/18.f)*new_pa->size;
+		new_pa->prev_state.co[0] -= (1.f/6.f)*new_pa->size;
+		new_pa->prev_state.co[1] -= (sqrt(3.f)/18.f)*new_pa->size;
+
+		new_pa = psys->particles+oldtotpart+1;
+		memcpy(new_pa, pa, sizeof(ParticleData));
+
+		new_pa->state.co[0] += (1.f/6.f)*new_pa->size;
+		new_pa->state.co[1] -= (sqrt(3.f)/18.f)*new_pa->size;
+		new_pa->prev_state.co[0] += (1.f/6.f)*new_pa->size;
+		new_pa->prev_state.co[1] -= (sqrt(3.f)/18.f)*new_pa->size;
+
+		pa->state.co[1] += (sqrt(3.f)/9.f)*new_pa->size;
+		pa->prev_state.co[1] += (sqrt(3.f)/9.f)*new_pa->size;
+
+		/* Set position for new particle */
+//		split_positions(sim, new_pa, i+1);
+
+		/* Set birth time. Offset to avoid particle reset. Is this robust though?*/
+		psys -> particles[oldtotpart].time = cfra - 0.001/((float)(part->subframes + 1));
+		psys -> particles[oldtotpart+1].time = cfra - 0.001/((float)(part->subframes + 1));
 		/* Update ParticleSettings->totpart.
 				  ParticleSystem->totpart? */
 		psys->part->totpart = newtotpart;

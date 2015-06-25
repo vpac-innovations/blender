@@ -2898,12 +2898,13 @@ static void dynamics_step(ParticleSimulationData *sim, float cfra)
 		    if (cfra > 795 && cfra < 10000) {
 			    LOOP_DYNAMIC_PARTICLES{
 				    if(pa->alive ==PARS_ALIVE && pa->split == PARS_UNSPLIT)
-					    BPH_sph_split_particle(sim, p, cfra);
+					    //BPH_sph_split_particle(sim, p, cfra);
+						BPH_sph_planar_split(sim, p, cfra);
 			    }
 		    }
 		    if (cfra > 795 && cfra < 10000){
 			    LOOP_DYNAMIC_PARTICLES{
-				    if(pa->alive == PARS_ALIVE && pa->sphmassfac <= 0.55f)
+				    if(pa->alive == PARS_ALIVE && pa->sphmassfac <= 0.0f)
 					    BPH_sph_unsplit_particle(sim, p, cfra);
 			    }
 		    }

@@ -1478,6 +1478,10 @@ static void rna_def_particle(BlenderRNA *brna)
 	RNA_def_property_float_sdna(prop, NULL, "sphdensity");
 	RNA_def_property_ui_text(prop, "SPH Density", "");
 
+	prop = RNA_def_property(srna, "sphmassfac", PROP_FLOAT, PROP_NONE);
+	RNA_def_property_float_sdna(prop, NULL, "sphmassfac");
+	RNA_def_property_ui_text(prop, "SPH Mass factor", "");
+
 	/* Hair & Keyed Keys */
 
 	prop = RNA_def_property(srna, "hair_keys", PROP_COLLECTION, PROP_NONE);
