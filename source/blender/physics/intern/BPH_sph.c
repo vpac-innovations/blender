@@ -54,407 +54,6 @@ static ThreadRWMutex psys_bvhtree_rwlock = BLI_RWLOCK_INITIALIZER;
 
 #define PSYS_FLUID_SPRINGS_INITIAL_SIZE 256
 
-static int nearest_split(ParticleSystem *psys, int pa_index)
-{
-	ParticleData *particle = psys->particles+pa_index, *pa;
-	float h = psys->part->fluid->radius * 0.5f;
-	float min_dist = 2.f * h;
-	float dist, vec[3];
-	int index=0, p;
-
-	/* Only loop over particles appearing after current particle
-	   This limit not necessary if particles array not being resized.*/
-	for(p=1; p < psys->totpart-pa_index; p++){
-		pa = particle+p;
-		if(pa->sphmassfac >= 0.7f || pa->alive != PARS_ALIVE ||
-		   ((pa->state.co[2] < 0.020) && (pa->state.co[2] > -0.020))&&
-		    (pa->state.co[1] < 0.020 && pa->state.co[1] > -0.020)&&
-		    (pa->state.co[0] < 0.020 && pa->state.co[0] > -0.020))
-			continue;
-
-		sub_v3_v3v3(vec, particle->state.co, pa->state.co);
-		dist = len_v3(vec);
-		if(dist < min_dist){
-			min_dist = dist;
-			index = pa_index+p;
-		}
-	}
-
-	return index;
-}
-
-void BPH_sph_unsplit_particle(ParticleSimulationData *sim, int index, float cfra)
-{
-	ParticleSystem *psys = sim->psys;
-	ParticleData *pa = psys->particles + index;
-	ParticleData *npa;
-	float qfac = qfac = 21.0f / (256.f * (float)M_PI);
-	float h = psys->part->fluid->radius * 0.5f;
-	float mass = psys->part->mass;
-	float fac1, fac2, wma, wmb, rij_h, old_massfac, vec[3], old_co[3], old_vel[3];
-	int index_n;
-
-	/* Unsplit outside splitting region only */
-	if((pa->state.co[2] < 0.020 && pa->state.co[2] > -0.020)&&
-	   (pa->state.co[1] < 0.020 && pa->state.co[1] > -0.020)&&
-	   (pa->state.co[0] < 0.020 && pa->state.co[0] > -0.020))
-		return;
-
-	/* Find index of nearest split particle */
-	index_n = nearest_split(psys, index);
-	if(index_n == 0)
-		return;
-
-	npa = psys->particles+index_n;
-
-	old_massfac = pa->sphmassfac;
-	copy_v3_v3(old_co, pa->state.co);
-	copy_v3_v3(old_vel, pa->state.vel);
-
-	/* Merge particles, kill unused particles*/
-	/* -- Set massfac for merged particle. */
-	pa->sphmassfac += npa->sphmassfac;
-
-	fac1 = (npa->sphmassfac)/(pa->sphmassfac);
-	fac2 = old_massfac/(pa->sphmassfac);
-
-	/* -- Set position for merged particle */
-	madd_v3_v3flv3fl(pa->state.co, npa->state.co, fac1, old_co, fac2);
-
-	/* -- Set velocity for merged particle */
-	madd_v3_v3flv3fl(pa->state.vel, npa->state.vel, fac1, old_vel, fac2);
-
-	/* -- Set sphalpha for merged particle */
-	sub_v3_v3v3(vec, pa->state.co, old_co);
-	rij_h = len_v3(vec)/(h * pa->sphalpha);
-	wma = old_massfac * mass * qfac / pow3f(h * pa->sphalpha) * pow4f(2.0f-rij_h) * (1.0f + 2.0f * rij_h);
-
-	sub_v3_v3v3(vec, pa->state.co, npa->state.co);
-	rij_h = len_v3(vec)/(h * npa->sphalpha);
-	wmb = npa->sphmassfac * mass * qfac / pow3f(h * npa->sphalpha) * pow4f(2.0f-rij_h) * (1.0f + 2.0f * rij_h);
-
-	fac1 = (21.f * pa->sphmassfac * mass)/(16.f * (float)M_PI * (wma + wmb));
-	pa->sphalpha = pow(fac1 , 1.f/3.f)/h;
-
-	/* -- Set state variables */
-	if(pa->sphmassfac >= 1.f)
-		pa->split = PARS_UNSPLIT;
-	/* -- Kill other particle. */
-	npa->dietime = cfra + 0.001/((float)(psys->part->subframes + 1));
-}
-
-static int split_through_wall_test(ParticleSimulationData *sim, ParticleData *pa, BVHTreeRayHit *hit)
-{
-	ColliderCache *coll;
-	ListBase *colliders = sim->colliders;
-	BVHTreeFromMesh treeData = {NULL};
-	Object *current;
-	float ray_start[3], ray_end[3], ray_dir[3], old_dist;
-
-	if(BLI_listbase_is_empty(colliders))
-		return 0;
-
-	copy_v3_v3(ray_start, pa->prev_state.co);
-	copy_v3_v3(ray_end, pa->state.co);
-
-	sub_v3_v3v3(ray_dir, ray_end, ray_start);
-	hit->index = -1;
-	hit->dist = len_v3(ray_dir);
-
-	/* Iterate over colliders and check for intersect */
-	for(coll=colliders->first; coll; coll=coll->next){
-		current = coll->ob;
-		old_dist = hit->dist;
-
-		bvhtree_from_mesh_faces(&treeData, current->derivedFinal, 0.0f, 4, 6);
-
-		/* Ray cast. */
-		BLI_bvhtree_ray_cast(treeData.tree, ray_start, ray_dir, pa->size, hit, treeData.raycast_callback, &treeData);
-
-		/* Throw out new hit distance if previous one was shorter. */
-		if(old_dist < hit->dist)
-			hit->dist = old_dist;
-
-		free_bvhtree_from_mesh(&treeData);
-	}
-	return hit->index >= 0;
-}
-
-static void split_positions(ParticleSimulationData *sim, ParticleData *pa, int num)
-{
-	ParticleData test_pa;
-	BVHTreeRayHit hit;
-	float h = sim->psys->part->fluid->radius * 0.5f;
-	float eps = 0.7f * h;
-	float factor = eps * sqrt(3.f) / 3.f;
-	int i;
-
-	memcpy(&test_pa, pa, sizeof(ParticleData));
-	for(i = 0; i < 3; i++){
-		test_pa.prev_state.co[i] = test_pa.state.co[i];
-	}
-
-	switch(num){
-		case 1:
-			/* Test for split through wall */
-			test_pa.state.co[0] += factor;
-			test_pa.state.co[1] += factor;
-			test_pa.state.co[2] += factor;
-
-			i = split_through_wall_test(sim, &test_pa, &hit);
-			if(i)
-				factor = (hit.dist-1.f*pa->size)*sqrt(3.f) / 3.f;
-
-			pa->state.co[0] += factor;
-			pa->state.co[1] += factor;
-			pa->state.co[2] += factor;
-			/* Not sure if this is appropriate.*/
-			pa->prev_state.co[0] += factor;
-			pa->prev_state.co[1] += factor;
-			pa->prev_state.co[2] += factor;
-			break;
-		case 2:
-			/* Test for split through wall */
-			test_pa.state.co[0] += factor;
-			test_pa.state.co[1] += factor;
-			test_pa.state.co[2] -= factor;
-
-			i = split_through_wall_test(sim, &test_pa, &hit);
-			if(i)
-				factor = (hit.dist-1.f*pa->size)*sqrt(3.f) / 3.f;
-
-			pa->state.co[0] += factor;
-			pa->state.co[1] += factor;
-			pa->state.co[2] -= factor;
-			/* Not sure if this is appropriate.*/
-			pa->prev_state.co[0] += factor;
-			pa->prev_state.co[1] += factor;
-			pa->prev_state.co[2] -= factor;
-			break;
-		case 3:
-			test_pa.state.co[0] += factor;
-			test_pa.state.co[1] -= factor;
-			test_pa.state.co[2] -= factor;
-
-			i = split_through_wall_test(sim, &test_pa, &hit);
-			if(i)
-				factor = (hit.dist-1.f*pa->size)*sqrt(3.f) / 3.f;
-
-			pa->state.co[0] += factor;
-			pa->state.co[1] -= factor;
-			pa->state.co[2] -= factor;
-			/* Not sure if this is appropriate.*/
-			pa->prev_state.co[0] += factor;
-			pa->prev_state.co[1] -= factor;
-			pa->prev_state.co[2] -= factor;
-			break;
-		case 4:
-			test_pa.state.co[0] -= factor;
-			test_pa.state.co[1] -= factor;
-			test_pa.state.co[2] -= factor;
-
-			i = split_through_wall_test(sim, &test_pa, &hit);
-			if(i)
-				factor = (hit.dist-1.f*pa->size)*sqrt(3.f) / 3.f;
-
-			pa->state.co[0] -= factor;
-			pa->state.co[1] -= factor;
-			pa->state.co[2] -= factor;
-			/* Not sure if this is appropriate.*/
-			pa->prev_state.co[0] -= factor;
-			pa->prev_state.co[1] -= factor;
-			pa->prev_state.co[2] -= factor;
-			break;
-		case 5:
-			test_pa.state.co[0] -= factor;
-			test_pa.state.co[1] += factor;
-			test_pa.state.co[2] += factor;
-
-			i = split_through_wall_test(sim, &test_pa, &hit);
-			if(i)
-				factor = (hit.dist-1.f*pa->size)*sqrt(3.f) / 3.f;
-
-			pa->state.co[0] -= factor;
-			pa->state.co[1] += factor;
-			pa->state.co[2] += factor;
-			/* Not sure if this is appropriate.*/
-			pa->prev_state.co[0] -= factor;
-			pa->prev_state.co[1] += factor;
-			pa->prev_state.co[2] += factor;
-			break;
-		case 6:
-			test_pa.state.co[0] -= factor;
-			test_pa.state.co[1] -= factor;
-			test_pa.state.co[2] += factor;
-
-			i = split_through_wall_test(sim, &test_pa, &hit);
-			if(i)
-				factor = (hit.dist-1.f*pa->size)*sqrt(3.f) / 3.f;
-
-			pa->state.co[0] -= factor;
-			pa->state.co[1] -= factor;
-			pa->state.co[2] += factor;
-			/* Not sure if this is appropriate.*/
-			pa->prev_state.co[0] -= factor;
-			pa->prev_state.co[1] -= factor;
-			pa->prev_state.co[2] += factor;
-			break;
-		case 7:
-			test_pa.state.co[0] += factor;
-			test_pa.state.co[1] -= factor;
-			test_pa.state.co[2] += factor;
-
-			i = split_through_wall_test(sim, &test_pa, &hit);
-			if(i)
-				factor = (hit.dist-1.f*pa->size)*sqrt(3.f) / 3.f;
-
-			pa->state.co[0] += factor;
-			pa->state.co[1] -= factor;
-			pa->state.co[2] += factor;
-			/* Not sure if this is appropriate.*/
-			pa->prev_state.co[0] += factor;
-			pa->prev_state.co[1] -= factor;
-			pa->prev_state.co[2] += factor;
-			break;
-		case 8:
-			test_pa.state.co[0] -= factor;
-			test_pa.state.co[1] += factor;
-			test_pa.state.co[2] -= factor;
-
-			i = split_through_wall_test(sim, &test_pa, &hit);
-			if(i)
-				factor = (hit.dist-1.f*pa->size)*sqrt(3.f) / 3.f;
-
-			pa->state.co[0] -= factor;
-			pa->state.co[1] += factor;
-			pa->state.co[2] -= factor;
-			/* Not sure if this is appropriate.*/
-			pa->prev_state.co[0] -= factor;
-			pa->prev_state.co[1] += factor;
-			pa->prev_state.co[2] -= factor;
-			break;
-		default:
-			break;
-	}
-}
-
-void BPH_sph_split_particle(ParticleSimulationData *sim, int index, float cfra)
-{
-	ParticleSystem *psys = sim->psys;
-	ParticleSettings *part = psys->part;
-	ParticleData *pa, *new_pa;
-	int oldtotpart = psys->totpart;
-	int newtotpart = oldtotpart+8;
-	int i;
-
-	pa = psys->particles+index;
-
-	/* Split particles in predefined box *//*
-	if((pa->state.co[2] >= -0.94 || pa->state.co[2] <= -1.0) ||
-	   (pa->state.co[1] <= 0.0 || pa->state.co[1] >= 0.05) ||
-	   (pa->state.co[0] >= -0.48 || pa->state.co[0] <= -0.52))
-		return;*/
-
-	if((pa->state.co[2] > 0.020 || pa->state.co[2] < -0.020) ||
-	   (pa->state.co[1] > 0.020 || pa->state.co[1] < -0.020) ||
-	   (pa->state.co[0] > 0.020 || pa->state.co[0] < -0.020))
-	   return;
-
-	/*if(psys->totsplit > 500)
-		return;*/
-
-	if(pa->split == PARS_UNSPLIT){
-		/* Re-allocate particles array */
-		realloc_particles(sim, newtotpart);
-		pa = psys->particles+index;
-
-		pa->split = PARS_SPLIT;
-		pa->sphalpha = 0.75f;
-		pa->sphmassfac = 0.253311f;
-
-		/* Make copies of parent particle at end of particles array */
-		for(i = 0; i < 8; i++){
-			new_pa = psys->particles+oldtotpart+i;
-			memcpy(new_pa, pa, sizeof(ParticleData));
-			new_pa->sphmassfac = 0.0933361f;
-
-			/* Set position for new particle */
-			split_positions(sim, new_pa, i+1);
-
-			/* Set birth time. Offset to avoid particle reset. Is this robust though?*/
-			psys -> particles[oldtotpart+i].time = cfra - 0.001/((float)(part->subframes + 1));
-		}
-		/* Update ParticleSettings->totpart.
-				  ParticleSystem->totpart? */
-		psys->part->totpart = newtotpart;
-		psys->totsplit += 1;
-	}
-}
-
-void BPH_sph_planar_split(ParticleSimulationData *sim, int index, float cfra)
-{
-	ParticleSystem *psys = sim->psys;
-	ParticleSettings *part = psys->part;
-	ParticleData *pa, *new_pa;
-	int oldtotpart = psys->totpart;
-	int newtotpart = oldtotpart+2;
-	int i;
-
-	pa = psys->particles+index;
-
-	/* Split particles in predefined box *//*
-	if((pa->state.co[2] >= -0.94 || pa->state.co[2] <= -1.0) ||
-	   (pa->state.co[1] <= 0.0 || pa->state.co[1] >= 0.05) ||
-	   (pa->state.co[0] >= -0.48 || pa->state.co[0] <= -0.52))
-		return;*/
-
-	if((pa->state.co[2] > 0.020 || pa->state.co[2] < -0.020) ||
-	   (pa->state.co[1] > 0.020 || pa->state.co[1] < -0.020) ||
-	   (pa->state.co[0] > 0.020 || pa->state.co[0] < -0.020))
-	   return;
-
-	if(pa->split == PARS_UNSPLIT){
-		/* Re-allocate particles array */
-		realloc_particles(sim, newtotpart);
-		pa = psys->particles+index;
-
-		pa->split = PARS_SPLIT;
-		pa->sphalpha = pow(1.f/3.f, 1.f/3.f);
-		pa->sphmassfac = 1.f/3.f;
-
-		/* Make copies of parent particle at end of particles array */
-		new_pa = psys->particles+oldtotpart;
-		memcpy(new_pa, pa, sizeof(ParticleData));
-
-		new_pa->state.co[0] -= (1.f/6.f)*new_pa->size;
-		new_pa->state.co[1] -= (sqrt(3.f)/18.f)*new_pa->size;
-		new_pa->prev_state.co[0] -= (1.f/6.f)*new_pa->size;
-		new_pa->prev_state.co[1] -= (sqrt(3.f)/18.f)*new_pa->size;
-
-		new_pa = psys->particles+oldtotpart+1;
-		memcpy(new_pa, pa, sizeof(ParticleData));
-
-		new_pa->state.co[0] += (1.f/6.f)*new_pa->size;
-		new_pa->state.co[1] -= (sqrt(3.f)/18.f)*new_pa->size;
-		new_pa->prev_state.co[0] += (1.f/6.f)*new_pa->size;
-		new_pa->prev_state.co[1] -= (sqrt(3.f)/18.f)*new_pa->size;
-
-		pa->state.co[1] += (sqrt(3.f)/9.f)*new_pa->size;
-		pa->prev_state.co[1] += (sqrt(3.f)/9.f)*new_pa->size;
-
-		/* Set position for new particle */
-//		split_positions(sim, new_pa, i+1);
-
-		/* Set birth time. Offset to avoid particle reset. Is this robust though?*/
-		psys -> particles[oldtotpart].time = cfra - 0.001/((float)(part->subframes + 1));
-		psys -> particles[oldtotpart+1].time = cfra - 0.001/((float)(part->subframes + 1));
-		/* Update ParticleSettings->totpart.
-				  ParticleSystem->totpart? */
-		psys->part->totpart = newtotpart;
-		psys->totsplit += 1;
-	}
-}
-
 /* Calculate the speed of the particle relative to the local scale of the
  * simulation. This should be called once per particle during a simulation
  * step, after the velocity has been updated. element_size defines the scale of                                                                        
@@ -570,10 +169,9 @@ static void sph_evaluate_func(BVHTree *tree, ParticleSystem **psys, float co[3],
   pfr->tot_neighbors = 0;
 
   for (i=0; i < 10 && psys[i]; i++) {
-    pfr->npsys    = psys[i];
+	pfr->npsys    = psys[i];
     pfr->massfac  = psys[i]->part->mass / pfr->mass;
     pfr->use_size = psys[i]->part->flag & PART_SIZEMASS;
-
     if (tree) {
       BLI_bvhtree_range_query(tree, co, interaction_radius, callback, pfr);
       break;
@@ -1072,6 +670,426 @@ static void sph_integrate(ParticleSimulationData *sim, ParticleData *pa, float d
   copy_particle_key(&pa->state, &pa->prev_state, 0);
   
   integrate_particle(part, pa, dtime, effector_acceleration, sphdata->force_cb, sphdata);
+}
+
+static int nearest_split(ParticleSystem *psys, SPHRangeData *pfr)
+{
+	/* Since particles array is not being resized, use nearest
+	 * neighbour callback to efficiently find closest neighbour
+	 * particle */
+	ParticleData *pa = pfr->pa, *npa;
+	SPHNeighbor *pfn;
+	float min_dist = 2.f * pfr->h;
+	float dist, vec[3];
+	int index=0, p;
+
+	pfn = pfr->neighbors;
+	for(p=0; p < pfr->tot_neighbors; p++, pfn++){
+		npa = pfn->psys->particles + pfn->index;
+		if(npa->sphmassfac >= 0.7f || npa->alive != PARS_ALIVE ||
+		   ((npa->state.co[2] < 0.060) && (npa->state.co[2] > -0.020) &&
+		    (npa->state.co[1] < 0.020 && npa->state.co[1] > -0.020) &&
+		    (npa->state.co[0] < 0.020 && npa->state.co[0] > -0.020)) ||
+			npa == pa){
+			continue;
+}
+		sub_v3_v3v3(vec, pa->state.co, npa->state.co);
+		dist = len_v3(vec);
+		if(dist < min_dist){
+			min_dist = dist;
+			index = pfn->index;
+		}
+	}
+
+	return index;
+}
+
+void BPH_sph_unsplit_particle(ParticleSimulationData *sim, float cfra)
+{
+	SPHData sphdata;
+	ParticleSystem *psys = sim->psys;
+	ParticleData *npa;
+	SPHRangeData pfr;
+	float qfac = qfac = 21.0f / (256.f * (float)M_PI);
+	float interaction_radius = psys->part->fluid->radius;
+	float h = interaction_radius * 0.5f;
+	float mass = psys->part->mass;
+	float fac1, fac2, wma, wmb, rij_h, old_massfac, vec[3], old_co[3], old_vel[3];
+	int index_n, i;
+	PARTICLE_P;
+
+	psys_sph_init(sim, &sphdata);
+
+	LOOP_DYNAMIC_PARTICLES{
+		/* Unsplit outside splitting region only */
+		if((pa->alive != PARS_ALIVE || pa->sphmassfac > 0.55f)){
+			continue;
+		}
+		if(((pa->state.co[2] < 0.060 && pa->state.co[2] > -0.020) &&
+		(pa->state.co[1] < 0.020 && pa->state.co[1] > -0.020) &&
+		(pa->state.co[0] < 0.020 && pa->state.co[0] > -0.020))){
+			continue;
+		}
+
+		pfr.h = h;
+		pfr.pa = pa;
+
+		/* Find nearest neighbours for current particle */
+		sph_evaluate_func(NULL, sphdata.psys, pa->state.co, &pfr, interaction_radius, sphclassical_neighbour_accum_cb);
+
+		/* Find index of nearest split particle */
+		index_n = nearest_split(psys, &pfr);
+		if(index_n == 0){
+			continue;
+		}
+		npa = psys->particles+index_n;
+		old_massfac = pa->sphmassfac;
+		copy_v3_v3(old_co, pa->state.co);
+		copy_v3_v3(old_vel, pa->state.vel);
+
+		/* Merge particles, kill unused particles*/
+		/* -- Set massfac for merged particle. */
+		pa->sphmassfac += npa->sphmassfac;
+
+		fac1 = (npa->sphmassfac)/(pa->sphmassfac);
+		fac2 = old_massfac/(pa->sphmassfac);
+
+		/* -- Set position for merged particle */
+		madd_v3_v3flv3fl(pa->state.co, npa->state.co, fac1, old_co, fac2);
+
+		/* -- Set velocity for merged particle */
+		madd_v3_v3flv3fl(pa->state.vel, npa->state.vel, fac1, old_vel, fac2);
+
+		/* -- Set sphalpha for merged particle */
+		sub_v3_v3v3(vec, pa->state.co, old_co);
+		rij_h = len_v3(vec)/(h * pa->sphalpha);
+		wma = old_massfac * mass * qfac / pow3f(h * pa->sphalpha) * pow4f(2.0f-rij_h) * (1.0f + 2.0f * rij_h);
+
+		sub_v3_v3v3(vec, pa->state.co, npa->state.co);
+		rij_h = len_v3(vec)/(h * npa->sphalpha);
+		wmb = npa->sphmassfac * mass * qfac / pow3f(h * npa->sphalpha) * pow4f(2.0f-rij_h) * (1.0f + 2.0f * rij_h);
+
+		fac1 = (21.f * pa->sphmassfac * mass)/(16.f * (float)M_PI * (wma + wmb));
+		pa->sphalpha = pow(fac1 , 1.f/3.f)/h;
+
+		/* -- Set state variables */
+		if(pa->sphmassfac >= 1.f)
+			pa->split = PARS_UNSPLIT;
+		/* -- Kill other particle. */
+		npa->dietime = cfra + 0.001/((float)(psys->part->subframes + 1));
+	}
+}
+
+static int split_through_wall_test(ParticleSimulationData *sim, ParticleData *pa, BVHTreeRayHit *hit)
+{
+	ColliderCache *coll;
+	ListBase *colliders = sim->colliders;
+	BVHTreeFromMesh treeData = {NULL};
+	Object *current;
+	float ray_start[3], ray_end[3], ray_dir[3], old_dist;
+
+	if(BLI_listbase_is_empty(colliders))
+		return 0;
+
+	copy_v3_v3(ray_start, pa->prev_state.co);
+	copy_v3_v3(ray_end, pa->state.co);
+
+	sub_v3_v3v3(ray_dir, ray_end, ray_start);
+	hit->index = -1;
+	hit->dist = len_v3(ray_dir);
+
+	/* Iterate over colliders and check for intersect */
+	for(coll=colliders->first; coll; coll=coll->next){
+		current = coll->ob;
+		old_dist = hit->dist;
+
+		bvhtree_from_mesh_faces(&treeData, current->derivedFinal, 0.0f, 4, 6);
+
+		/* Ray cast. */
+		BLI_bvhtree_ray_cast(treeData.tree, ray_start, ray_dir, pa->size, hit, treeData.raycast_callback, &treeData);
+
+		/* Throw out new hit distance if previous one was shorter. */
+		if(old_dist < hit->dist)
+			hit->dist = old_dist;
+
+		free_bvhtree_from_mesh(&treeData);
+	}
+	return hit->index >= 0;
+}
+
+static void split_positions(ParticleSimulationData *sim, ParticleData *pa, int num)
+{
+	ParticleData test_pa;
+	BVHTreeRayHit hit;
+	float h = sim->psys->part->fluid->radius * 0.5f;
+	float eps = 0.7f * h;
+	float factor = eps * sqrt(3.f) / 3.f;
+	int i;
+
+	memcpy(&test_pa, pa, sizeof(ParticleData));
+	for(i = 0; i < 3; i++){
+		test_pa.prev_state.co[i] = test_pa.state.co[i];
+	}
+
+	switch(num){
+		case 1:
+			/* Test for split through wall */
+			test_pa.state.co[0] += factor;
+			test_pa.state.co[1] += factor;
+			test_pa.state.co[2] += factor;
+
+			i = split_through_wall_test(sim, &test_pa, &hit);
+			if(i)
+				factor = (hit.dist-1.f*pa->size)*sqrt(3.f) / 3.f;
+
+			pa->state.co[0] += factor;
+			pa->state.co[1] += factor;
+			pa->state.co[2] += factor;
+			/* Not sure if this is appropriate.*/
+			pa->prev_state.co[0] += factor;
+			pa->prev_state.co[1] += factor;
+			pa->prev_state.co[2] += factor;
+			break;
+		case 2:
+			/* Test for split through wall */
+			test_pa.state.co[0] += factor;
+			test_pa.state.co[1] += factor;
+			test_pa.state.co[2] -= factor;
+
+			i = split_through_wall_test(sim, &test_pa, &hit);
+			if(i)
+				factor = (hit.dist-1.f*pa->size)*sqrt(3.f) / 3.f;
+
+			pa->state.co[0] += factor;
+			pa->state.co[1] += factor;
+			pa->state.co[2] -= factor;
+			/* Not sure if this is appropriate.*/
+			pa->prev_state.co[0] += factor;
+			pa->prev_state.co[1] += factor;
+			pa->prev_state.co[2] -= factor;
+			break;
+		case 3:
+			test_pa.state.co[0] += factor;
+			test_pa.state.co[1] -= factor;
+			test_pa.state.co[2] -= factor;
+
+			i = split_through_wall_test(sim, &test_pa, &hit);
+			if(i)
+				factor = (hit.dist-1.f*pa->size)*sqrt(3.f) / 3.f;
+
+			pa->state.co[0] += factor;
+			pa->state.co[1] -= factor;
+			pa->state.co[2] -= factor;
+			/* Not sure if this is appropriate.*/
+			pa->prev_state.co[0] += factor;
+			pa->prev_state.co[1] -= factor;
+			pa->prev_state.co[2] -= factor;
+			break;
+		case 4:
+			test_pa.state.co[0] -= factor;
+			test_pa.state.co[1] -= factor;
+			test_pa.state.co[2] -= factor;
+
+			i = split_through_wall_test(sim, &test_pa, &hit);
+			if(i)
+				factor = (hit.dist-1.f*pa->size)*sqrt(3.f) / 3.f;
+
+			pa->state.co[0] -= factor;
+			pa->state.co[1] -= factor;
+			pa->state.co[2] -= factor;
+			/* Not sure if this is appropriate.*/
+			pa->prev_state.co[0] -= factor;
+			pa->prev_state.co[1] -= factor;
+			pa->prev_state.co[2] -= factor;
+			break;
+		case 5:
+			test_pa.state.co[0] -= factor;
+			test_pa.state.co[1] += factor;
+			test_pa.state.co[2] += factor;
+
+			i = split_through_wall_test(sim, &test_pa, &hit);
+			if(i)
+				factor = (hit.dist-1.f*pa->size)*sqrt(3.f) / 3.f;
+
+			pa->state.co[0] -= factor;
+			pa->state.co[1] += factor;
+			pa->state.co[2] += factor;
+			/* Not sure if this is appropriate.*/
+			pa->prev_state.co[0] -= factor;
+			pa->prev_state.co[1] += factor;
+			pa->prev_state.co[2] += factor;
+			break;
+		case 6:
+			test_pa.state.co[0] -= factor;
+			test_pa.state.co[1] -= factor;
+			test_pa.state.co[2] += factor;
+
+			i = split_through_wall_test(sim, &test_pa, &hit);
+			if(i)
+				factor = (hit.dist-1.f*pa->size)*sqrt(3.f) / 3.f;
+
+			pa->state.co[0] -= factor;
+			pa->state.co[1] -= factor;
+			pa->state.co[2] += factor;
+			/* Not sure if this is appropriate.*/
+			pa->prev_state.co[0] -= factor;
+			pa->prev_state.co[1] -= factor;
+			pa->prev_state.co[2] += factor;
+			break;
+		case 7:
+			test_pa.state.co[0] += factor;
+			test_pa.state.co[1] -= factor;
+			test_pa.state.co[2] += factor;
+
+			i = split_through_wall_test(sim, &test_pa, &hit);
+			if(i)
+				factor = (hit.dist-1.f*pa->size)*sqrt(3.f) / 3.f;
+
+			pa->state.co[0] += factor;
+			pa->state.co[1] -= factor;
+			pa->state.co[2] += factor;
+			/* Not sure if this is appropriate.*/
+			pa->prev_state.co[0] += factor;
+			pa->prev_state.co[1] -= factor;
+			pa->prev_state.co[2] += factor;
+			break;
+		case 8:
+			test_pa.state.co[0] -= factor;
+			test_pa.state.co[1] += factor;
+			test_pa.state.co[2] -= factor;
+
+			i = split_through_wall_test(sim, &test_pa, &hit);
+			if(i)
+				factor = (hit.dist-1.f*pa->size)*sqrt(3.f) / 3.f;
+
+			pa->state.co[0] -= factor;
+			pa->state.co[1] += factor;
+			pa->state.co[2] -= factor;
+			/* Not sure if this is appropriate.*/
+			pa->prev_state.co[0] -= factor;
+			pa->prev_state.co[1] += factor;
+			pa->prev_state.co[2] -= factor;
+			break;
+		default:
+			break;
+	}
+}
+
+void BPH_sph_split_particle(ParticleSimulationData *sim, int index, float cfra)
+{
+	ParticleSystem *psys = sim->psys;
+	ParticleSettings *part = psys->part;
+	ParticleData *pa, *new_pa;
+	int oldtotpart = psys->totpart;
+	int newtotpart = oldtotpart+8;
+	int i;
+
+	pa = psys->particles+index;
+
+	/* Split particles in predefined box *//*
+	if((pa->state.co[2] >= -0.94 || pa->state.co[2] <= -1.0) ||
+	   (pa->state.co[1] <= 0.0 || pa->state.co[1] >= 0.05) ||
+	   (pa->state.co[0] >= -0.48 || pa->state.co[0] <= -0.52))
+		return;*/
+
+	if((pa->state.co[2] > 0.060 || pa->state.co[2] < -0.020) ||
+	   (pa->state.co[1] > 0.020 || pa->state.co[1] < -0.020) ||
+	   (pa->state.co[0] > 0.020 || pa->state.co[0] < -0.020))
+	   return;
+
+	/*if(psys->totsplit > 500)
+		return;*/
+
+	if(pa->split == PARS_UNSPLIT){
+		/* Re-allocate particles array */
+		realloc_particles(sim, newtotpart);
+		pa = psys->particles+index;
+
+		pa->split = PARS_SPLIT;
+		pa->sphalpha = 0.75f;
+		pa->sphmassfac = 0.253311f;
+
+		/* Make copies of parent particle at end of particles array */
+		for(i = 0; i < 8; i++){
+			new_pa = psys->particles+oldtotpart+i;
+			memcpy(new_pa, pa, sizeof(ParticleData));
+			new_pa->sphmassfac = 0.0933361f;
+
+			/* Set position for new particle */
+			split_positions(sim, new_pa, i+1);
+
+			/* Set birth time. Offset to avoid particle reset. Is this robust though?*/
+			psys -> particles[oldtotpart+i].time = cfra - 0.001/((float)(part->subframes + 1));
+		}
+		/* Update ParticleSettings->totpart.
+				  ParticleSystem->totpart? */
+		psys->part->totpart = newtotpart;
+		psys->totsplit += 1;
+	}
+}
+
+void BPH_sph_planar_split(ParticleSimulationData *sim, int index, float cfra)
+{
+	ParticleSystem *psys = sim->psys;
+	ParticleSettings *part = psys->part;
+	ParticleData *pa, *new_pa;
+	int oldtotpart = psys->totpart;
+	int newtotpart = oldtotpart+2;
+	int i;
+
+	pa = psys->particles+index;
+
+	/* Split particles in predefined box *//*
+	if((pa->state.co[2] >= -0.94 || pa->state.co[2] <= -1.0) ||
+	   (pa->state.co[1] <= 0.0 || pa->state.co[1] >= 0.05) ||
+	   (pa->state.co[0] >= -0.48 || pa->state.co[0] <= -0.52))
+		return;*/
+
+	if((pa->state.co[2] > 0.040 || pa->state.co[2] < -0.020) ||
+	   (pa->state.co[1] > 0.020 || pa->state.co[1] < -0.020) ||
+	   (pa->state.co[0] > 0.020 || pa->state.co[0] < -0.020))
+	   return;
+
+	if(pa->split == PARS_UNSPLIT){
+		/* Re-allocate particles array */
+		realloc_particles(sim, newtotpart);
+		pa = psys->particles+index;
+
+		pa->split = PARS_SPLIT;
+		pa->sphalpha = pow(1.f/3.f, 1.f/3.f);
+		pa->sphmassfac = 1.f/3.f;
+
+		/* Make copies of parent particle at end of particles array */
+		new_pa = psys->particles+oldtotpart;
+		memcpy(new_pa, pa, sizeof(ParticleData));
+
+		new_pa->state.co[0] -= (1.f/6.f)*new_pa->size;
+		new_pa->state.co[1] -= (sqrt(3.f)/18.f)*new_pa->size;
+		new_pa->prev_state.co[0] -= (1.f/6.f)*new_pa->size;
+		new_pa->prev_state.co[1] -= (sqrt(3.f)/18.f)*new_pa->size;
+
+		new_pa = psys->particles+oldtotpart+1;
+		memcpy(new_pa, pa, sizeof(ParticleData));
+
+		new_pa->state.co[0] += (1.f/6.f)*new_pa->size;
+		new_pa->state.co[1] -= (sqrt(3.f)/18.f)*new_pa->size;
+		new_pa->prev_state.co[0] += (1.f/6.f)*new_pa->size;
+		new_pa->prev_state.co[1] -= (sqrt(3.f)/18.f)*new_pa->size;
+
+		pa->state.co[1] += (sqrt(3.f)/9.f)*new_pa->size;
+		pa->prev_state.co[1] += (sqrt(3.f)/9.f)*new_pa->size;
+
+		/* Set position for new particle */
+//		split_positions(sim, new_pa, i+1);
+
+		/* Set birth time. Offset to avoid particle reset. Is this robust though?*/
+		psys -> particles[oldtotpart].time = cfra - 0.001/((float)(part->subframes + 1));
+		psys -> particles[oldtotpart+1].time = cfra - 0.001/((float)(part->subframes + 1));
+		/* Update ParticleSettings->totpart.
+				  ParticleSystem->totpart? */
+		psys->part->totpart = newtotpart;
+		psys->totsplit += 1;
+	}
 }
 
 void BPH_sphDDR_step(ParticleSimulationData *sim, float dtime, float cfra)

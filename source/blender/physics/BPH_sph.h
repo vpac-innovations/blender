@@ -98,7 +98,7 @@ typedef struct SPHData {
 } SPHData;
 
 /* General SPH functions */
-void BPH_sph_unsplit_particle(struct ParticleSimulationData *sim, int index, float cfra);
+void BPH_sph_unsplit_particle(struct ParticleSimulationData *sim, float cfra);
 void BPH_sph_split_particle(struct ParticleSimulationData *sim, int index, float cfra);
 void BPH_sph_planar_split(struct ParticleSimulationData *sim, int index, float cfra);
 
