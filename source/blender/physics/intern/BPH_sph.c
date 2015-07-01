@@ -686,13 +686,14 @@ static int nearest_split(ParticleSystem *psys, SPHRangeData *pfr)
 	pfn = pfr->neighbors;
 	for(p=0; p < pfr->tot_neighbors; p++, pfn++){
 		npa = pfn->psys->particles + pfn->index;
-		if(npa->sphmassfac >= 0.7f || npa->alive != PARS_ALIVE ||
-		   ((npa->state.co[2] < 0.060) && (npa->state.co[2] > -0.020) &&
-		    (npa->state.co[1] < 0.020 && npa->state.co[1] > -0.020) &&
-		    (npa->state.co[0] < 0.020 && npa->state.co[0] > -0.020)) ||
+		if(pa->sphmassfac+npa->sphmassfac >= 1.1f || npa->alive != PARS_ALIVE ||
+		   ((npa->state.co[2] < 0.30) && (npa->state.co[2] > -0.030) &&
+		    (npa->state.co[1] < 0.030 && npa->state.co[1] > -0.030) &&
+		    (npa->state.co[0] < 0.030 && npa->state.co[0] > -0.030)) ||
 			npa == pa){
 			continue;
-}
+		}
+
 		sub_v3_v3v3(vec, pa->state.co, npa->state.co);
 		dist = len_v3(vec);
 		if(dist < min_dist){
@@ -722,12 +723,12 @@ void BPH_sph_unsplit_particle(ParticleSimulationData *sim, float cfra)
 
 	LOOP_DYNAMIC_PARTICLES{
 		/* Unsplit outside splitting region only */
-		if((pa->alive != PARS_ALIVE || pa->sphmassfac > 0.55f)){
+		if((pa->alive != PARS_ALIVE || pa->sphmassfac > 0.91f)){
 			continue;
 		}
-		if(((pa->state.co[2] < 0.060 && pa->state.co[2] > -0.020) &&
-		(pa->state.co[1] < 0.020 && pa->state.co[1] > -0.020) &&
-		(pa->state.co[0] < 0.020 && pa->state.co[0] > -0.020))){
+		if(((pa->state.co[2] < 0.30 && pa->state.co[2] > -0.030) &&
+		(pa->state.co[1] < 0.030 && pa->state.co[1] > -0.030) &&
+		(pa->state.co[0] < 0.030 && pa->state.co[0] > -0.030))){
 			continue;
 		}
 
@@ -739,9 +740,9 @@ void BPH_sph_unsplit_particle(ParticleSimulationData *sim, float cfra)
 
 		/* Find index of nearest split particle */
 		index_n = nearest_split(psys, &pfr);
-		if(index_n == 0){
+		if(index_n == 0)
 			continue;
-		}
+
 		npa = psys->particles+index_n;
 		old_massfac = pa->sphmassfac;
 		copy_v3_v3(old_co, pa->state.co);
@@ -773,10 +774,14 @@ void BPH_sph_unsplit_particle(ParticleSimulationData *sim, float cfra)
 		pa->sphalpha = pow(fac1 , 1.f/3.f)/h;
 
 		/* -- Set state variables */
-		if(pa->sphmassfac >= 1.f)
+		if(pa->sphmassfac >= 1.f){
 			pa->split = PARS_UNSPLIT;
+			pa->sphmassfac = 1.f;
+			pa->sphalpha = 1.f;
+		}
 		/* -- Kill other particle. */
 		npa->dietime = cfra + 0.001/((float)(psys->part->subframes + 1));
+		npa->alive = PARS_DEAD;
 	}
 }
 
@@ -838,9 +843,11 @@ static void split_positions(ParticleSimulationData *sim, ParticleData *pa, int n
 			test_pa.state.co[1] += factor;
 			test_pa.state.co[2] += factor;
 
-			i = split_through_wall_test(sim, &test_pa, &hit);
-			if(i)
-				factor = (hit.dist-1.f*pa->size)*sqrt(3.f) / 3.f;
+			if(sim->colliders){
+				i = split_through_wall_test(sim, &test_pa, &hit);
+				if(i)
+					factor = (hit.dist-1.f*pa->size)*sqrt(3.f) / 3.f;
+			}
 
 			pa->state.co[0] += factor;
 			pa->state.co[1] += factor;
@@ -856,9 +863,11 @@ static void split_positions(ParticleSimulationData *sim, ParticleData *pa, int n
 			test_pa.state.co[1] += factor;
 			test_pa.state.co[2] -= factor;
 
-			i = split_through_wall_test(sim, &test_pa, &hit);
-			if(i)
-				factor = (hit.dist-1.f*pa->size)*sqrt(3.f) / 3.f;
+			if(sim->colliders){
+				i = split_through_wall_test(sim, &test_pa, &hit);
+				if(i)
+					factor = (hit.dist-1.f*pa->size)*sqrt(3.f) / 3.f;
+			}
 
 			pa->state.co[0] += factor;
 			pa->state.co[1] += factor;
@@ -873,9 +882,11 @@ static void split_positions(ParticleSimulationData *sim, ParticleData *pa, int n
 			test_pa.state.co[1] -= factor;
 			test_pa.state.co[2] -= factor;
 
-			i = split_through_wall_test(sim, &test_pa, &hit);
-			if(i)
-				factor = (hit.dist-1.f*pa->size)*sqrt(3.f) / 3.f;
+			if(sim->colliders){
+				i = split_through_wall_test(sim, &test_pa, &hit);
+				if(i)
+					factor = (hit.dist-1.f*pa->size)*sqrt(3.f) / 3.f;
+			}
 
 			pa->state.co[0] += factor;
 			pa->state.co[1] -= factor;
@@ -890,9 +901,11 @@ static void split_positions(ParticleSimulationData *sim, ParticleData *pa, int n
 			test_pa.state.co[1] -= factor;
 			test_pa.state.co[2] -= factor;
 
-			i = split_through_wall_test(sim, &test_pa, &hit);
-			if(i)
-				factor = (hit.dist-1.f*pa->size)*sqrt(3.f) / 3.f;
+			if(sim->colliders){
+				i = split_through_wall_test(sim, &test_pa, &hit);
+				if(i)
+					factor = (hit.dist-1.f*pa->size)*sqrt(3.f) / 3.f;
+			}
 
 			pa->state.co[0] -= factor;
 			pa->state.co[1] -= factor;
@@ -907,9 +920,11 @@ static void split_positions(ParticleSimulationData *sim, ParticleData *pa, int n
 			test_pa.state.co[1] += factor;
 			test_pa.state.co[2] += factor;
 
-			i = split_through_wall_test(sim, &test_pa, &hit);
-			if(i)
-				factor = (hit.dist-1.f*pa->size)*sqrt(3.f) / 3.f;
+			if(sim->colliders){
+				i = split_through_wall_test(sim, &test_pa, &hit);
+				if(i)
+					factor = (hit.dist-1.f*pa->size)*sqrt(3.f) / 3.f;
+			}
 
 			pa->state.co[0] -= factor;
 			pa->state.co[1] += factor;
@@ -924,9 +939,11 @@ static void split_positions(ParticleSimulationData *sim, ParticleData *pa, int n
 			test_pa.state.co[1] -= factor;
 			test_pa.state.co[2] += factor;
 
-			i = split_through_wall_test(sim, &test_pa, &hit);
-			if(i)
-				factor = (hit.dist-1.f*pa->size)*sqrt(3.f) / 3.f;
+			if(sim->colliders){
+				i = split_through_wall_test(sim, &test_pa, &hit);
+				if(i)
+					factor = (hit.dist-1.f*pa->size)*sqrt(3.f) / 3.f;
+			}
 
 			pa->state.co[0] -= factor;
 			pa->state.co[1] -= factor;
@@ -941,9 +958,11 @@ static void split_positions(ParticleSimulationData *sim, ParticleData *pa, int n
 			test_pa.state.co[1] -= factor;
 			test_pa.state.co[2] += factor;
 
-			i = split_through_wall_test(sim, &test_pa, &hit);
-			if(i)
-				factor = (hit.dist-1.f*pa->size)*sqrt(3.f) / 3.f;
+			if(sim->colliders){
+				i = split_through_wall_test(sim, &test_pa, &hit);
+				if(i)
+					factor = (hit.dist-1.f*pa->size)*sqrt(3.f) / 3.f;
+			}
 
 			pa->state.co[0] += factor;
 			pa->state.co[1] -= factor;
@@ -958,9 +977,11 @@ static void split_positions(ParticleSimulationData *sim, ParticleData *pa, int n
 			test_pa.state.co[1] += factor;
 			test_pa.state.co[2] -= factor;
 
-			i = split_through_wall_test(sim, &test_pa, &hit);
-			if(i)
-				factor = (hit.dist-1.f*pa->size)*sqrt(3.f) / 3.f;
+			if(sim->colliders){
+				i = split_through_wall_test(sim, &test_pa, &hit);
+				if(i)
+					factor = (hit.dist-1.f*pa->size)*sqrt(3.f) / 3.f;
+			}
 
 			pa->state.co[0] -= factor;
 			pa->state.co[1] += factor;
@@ -992,7 +1013,7 @@ void BPH_sph_split_particle(ParticleSimulationData *sim, int index, float cfra)
 	   (pa->state.co[0] >= -0.48 || pa->state.co[0] <= -0.52))
 		return;*/
 
-	if((pa->state.co[2] > 0.060 || pa->state.co[2] < -0.020) ||
+	if((pa->state.co[2] > 0.020 || pa->state.co[2] < -0.020) ||
 	   (pa->state.co[1] > 0.020 || pa->state.co[1] < -0.020) ||
 	   (pa->state.co[0] > 0.020 || pa->state.co[0] < -0.020))
 	   return;
@@ -1002,18 +1023,19 @@ void BPH_sph_split_particle(ParticleSimulationData *sim, int index, float cfra)
 
 	if(pa->split == PARS_UNSPLIT){
 		/* Re-allocate particles array */
+
 		realloc_particles(sim, newtotpart);
 		pa = psys->particles+index;
 
 		pa->split = PARS_SPLIT;
 		pa->sphalpha = 0.75f;
-		pa->sphmassfac = 0.253311f;
+		pa->sphmassfac = 0.2f;
 
 		/* Make copies of parent particle at end of particles array */
 		for(i = 0; i < 8; i++){
 			new_pa = psys->particles+oldtotpart+i;
 			memcpy(new_pa, pa, sizeof(ParticleData));
-			new_pa->sphmassfac = 0.0933361f;
+			new_pa->sphmassfac = 0.1f;
 
 			/* Set position for new particle */
 			split_positions(sim, new_pa, i+1);

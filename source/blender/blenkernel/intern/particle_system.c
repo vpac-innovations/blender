@@ -2902,10 +2902,10 @@ static void dynamics_step(ParticleSimulationData *sim, float cfra)
 						//BPH_sph_planar_split(sim, p, cfra);
 					}
 			    }
+			}
 		    if (cfra > 799 && cfra < 50000){
 				BPH_sph_unsplit_particle(sim, cfra);
-			    }
-		    }
+			}
 #endif
 			  /* Apply SPH forces using classical algorithm (due to Gingold
 			   * and Monaghan). Note that, unlike double-density relaxation,
