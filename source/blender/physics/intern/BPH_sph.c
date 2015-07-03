@@ -743,11 +743,7 @@ void BPH_sph_unsplit_particle(ParticleSimulationData *sim, float cfra)
 		if(index_n == 0)
 			continue;
 
-		printf("FRAME: %f\n", cfra);
-		printf("merging particle %d and %d\n", p, index_n);
-
 		npa = psys->particles+index_n;
-		printf("Particles have massfacs %f and %f\n", pa->sphmassfac, npa->sphmassfac);
 		old_massfac = pa->sphmassfac;
 		copy_v3_v3(old_co, pa->state.co);
 		copy_v3_v3(old_vel, pa->state.vel);
@@ -781,7 +777,6 @@ void BPH_sph_unsplit_particle(ParticleSimulationData *sim, float cfra)
 			  Not checking for sphmassfac == 1 to
 			  allow for precision errors.          */
 		if(pa->sphmassfac >= 0.95f){
-			printf("Particle %d with massfac: %f, can be re-split\n", p, pa->sphmassfac);
 			pa->split = PARS_UNSPLIT;
 			pa->sphmassfac = 1.f;
 			pa->sphalpha = 1.f;
