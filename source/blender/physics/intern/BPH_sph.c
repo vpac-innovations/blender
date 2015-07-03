@@ -686,7 +686,7 @@ static int nearest_split(ParticleSystem *psys, SPHRangeData *pfr)
 	pfn = pfr->neighbors;
 	for(p=0; p < pfr->tot_neighbors; p++, pfn++){
 		npa = pfn->psys->particles + pfn->index;
-		if(pa->sphmassfac+npa->sphmassfac >= 1.1f || npa->alive != PARS_ALIVE ||
+		if(pa->sphmassfac+npa->sphmassfac >= 1.05f || npa->alive != PARS_ALIVE ||
 		   ((npa->state.co[2] < 0.30) && (npa->state.co[2] > -0.030) &&
 		    (npa->state.co[1] < 0.030 && npa->state.co[1] > -0.030) &&
 		    (npa->state.co[0] < 0.030 && npa->state.co[0] > -0.030)) ||
@@ -743,7 +743,11 @@ void BPH_sph_unsplit_particle(ParticleSimulationData *sim, float cfra)
 		if(index_n == 0)
 			continue;
 
+		printf("FRAME: %f\n", cfra);
+		printf("merging particle %d and %d\n", p, index_n);
+
 		npa = psys->particles+index_n;
+		printf("Particles have massfacs %f and %f\n", pa->sphmassfac, npa->sphmassfac);
 		old_massfac = pa->sphmassfac;
 		copy_v3_v3(old_co, pa->state.co);
 		copy_v3_v3(old_vel, pa->state.vel);
@@ -773,8 +777,11 @@ void BPH_sph_unsplit_particle(ParticleSimulationData *sim, float cfra)
 		fac1 = (21.f * pa->sphmassfac * mass)/(16.f * (float)M_PI * (wma + wmb));
 		pa->sphalpha = pow(fac1 , 1.f/3.f)/h;
 
-		/* -- Set state variables */
-		if(pa->sphmassfac >= 1.f){
+		/* -- Set state variables
+			  Not checking for sphmassfac == 1 to
+			  allow for precision errors.          */
+		if(pa->sphmassfac >= 0.95f){
+			printf("Particle %d with massfac: %f, can be re-split\n", p, pa->sphmassfac);
 			pa->split = PARS_UNSPLIT;
 			pa->sphmassfac = 1.f;
 			pa->sphalpha = 1.f;
@@ -1007,23 +1014,14 @@ void BPH_sph_split_particle(ParticleSimulationData *sim, int index, float cfra)
 
 	pa = psys->particles+index;
 
-	/* Split particles in predefined box *//*
-	if((pa->state.co[2] >= -0.94 || pa->state.co[2] <= -1.0) ||
-	   (pa->state.co[1] <= 0.0 || pa->state.co[1] >= 0.05) ||
-	   (pa->state.co[0] >= -0.48 || pa->state.co[0] <= -0.52))
-		return;*/
-
+	/* Split particles in predefined box */
 	if((pa->state.co[2] > 0.020 || pa->state.co[2] < -0.020) ||
 	   (pa->state.co[1] > 0.020 || pa->state.co[1] < -0.020) ||
 	   (pa->state.co[0] > 0.020 || pa->state.co[0] < -0.020))
 	   return;
 
-	/*if(psys->totsplit > 500)
-		return;*/
-
 	if(pa->split == PARS_UNSPLIT){
 		/* Re-allocate particles array */
-
 		realloc_particles(sim, newtotpart);
 		pa = psys->particles+index;
 
@@ -1061,12 +1059,7 @@ void BPH_sph_planar_split(ParticleSimulationData *sim, int index, float cfra)
 
 	pa = psys->particles+index;
 
-	/* Split particles in predefined box *//*
-	if((pa->state.co[2] >= -0.94 || pa->state.co[2] <= -1.0) ||
-	   (pa->state.co[1] <= 0.0 || pa->state.co[1] >= 0.05) ||
-	   (pa->state.co[0] >= -0.48 || pa->state.co[0] <= -0.52))
-		return;*/
-
+	/* Split particles in predefined box */
 	if((pa->state.co[2] > 0.040 || pa->state.co[2] < -0.020) ||
 	   (pa->state.co[1] > 0.020 || pa->state.co[1] < -0.020) ||
 	   (pa->state.co[0] > 0.020 || pa->state.co[0] < -0.020))

@@ -1044,7 +1044,9 @@ void reset_particle(ParticleSimulationData *sim, ParticleData *pa, float dtime, 
 	else
 		pa->alive = PARS_ALIVE;
 
+	/* Initialize adaptive resolution variables. */
 	if (!pa->split){
+		printf("Initializing particle splitting parameters for particle %d\n", p);
 		pa->split = PARS_UNSPLIT;
 		pa->sphalpha = 1.f;
 		pa->sphmassfac = 1.f;

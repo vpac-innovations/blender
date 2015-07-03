@@ -1437,6 +1437,12 @@ static void rna_def_particle(BlenderRNA *brna)
 		{0, NULL, 0, NULL, NULL}
 	};
 
+	static EnumPropertyItem split_items[] = {
+		/*{PARS_KILLED, "KILLED", 0, "Killed", ""}, */
+		{PARS_SPLIT, "SPLIT", 0, "Split", ""},
+		{PARS_UNSPLIT, "UNSPLIT", 0, "Unsplit", ""},
+		{0, NULL, 0, NULL, NULL}
+	};
 	srna = RNA_def_struct(brna, "Particle", NULL);
 	RNA_def_struct_sdna(srna, "ParticleData");
 	RNA_def_struct_ui_text(srna, "Particle", "Particle in a particle system");
@@ -1537,6 +1543,11 @@ static void rna_def_particle(BlenderRNA *brna)
 	RNA_def_property_enum_sdna(prop, NULL, "alive");
 	RNA_def_property_enum_items(prop, alive_items);
 	RNA_def_property_ui_text(prop, "Alive State", "");
+
+	prop = RNA_def_property(srna, "split_state", PROP_ENUM, PROP_NONE);
+	RNA_def_property_enum_sdna(prop, NULL, "split");
+	RNA_def_property_enum_items(prop, split_items);
+	RNA_def_property_ui_text(prop, "Split State", "");
 
 /*	short rt2; */
 
