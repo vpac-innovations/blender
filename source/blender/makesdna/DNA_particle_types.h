@@ -118,8 +118,8 @@ typedef struct ParticleData {
 	float size;				/* size and multiplier so that we can update size when ever */
 
 	float sphdensity;		/* density of sph particle */
-	float sphmassfac;		/* mass factor for particle splitting */
-	float sphalpha;			/* smoothing length factor for particle splitting */
+	float sphmassfac;		/* mass factor for adaptive resolution */
+	float sphalpha;			/* smoothing length factor for adaptive resolution */
 
 	short pad;
 	short split;			/* splitting status of a particle*/
