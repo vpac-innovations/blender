@@ -142,6 +142,13 @@ typedef struct SPHFluidSettings {
 	short pad[3];
 } SPHFluidSettings;
 
+typedef struct DeadParticles{
+	/* Dynamic storage to allow re-use of dead particles */
+	int *data;		/* Pointer to array of dead particle indices */
+	int size;		/* Number of dead particles */
+	int capacity;	/* Capacity of data array */
+} DeadParticles;
+
 /* fluid->flag */
 #define SPH_VISCOELASTIC_SPRINGS	1
 #define SPH_CURRENT_REST_LENGTH		2
@@ -326,8 +333,9 @@ typedef struct ParticleSystem {
 
 	float dt_frac;							/* current time step, as a fraction of a frame */
 	float _pad;								/* spare capacity */
-	int totsplit;
-	int totunsplit;
+	DeadParticles deadpars;
+	int totadded;
+	int pad1;
 } ParticleSystem;
 
 typedef enum eParticleDrawFlag {

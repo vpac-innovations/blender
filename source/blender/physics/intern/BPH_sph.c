@@ -613,6 +613,45 @@ void psys_sph_finalise(SPHData *sphdata)
 	}
 }
 
+void psys_deadpars_init(DeadParticles* deadpars)
+{
+	deadpars->data = MEM_callocN(1000*sizeof(int), "dead particles");
+	deadpars->capacity = 1000;
+	deadpars->size= 0;
+}
+
+void psys_deadpars_add(DeadParticles* deadpars, int index)
+{
+	int *new_data;
+
+	/* If there is space in dead particle array add new index to the end. */
+	if(deadpars->size < deadpars->capacity){
+		*(deadpars->data + deadpars->size) = index;
+		deadpars->size++;
+		return;
+	}
+
+	printf("Increasing capacity of deadpars\n");
+
+	/* Otherwise reallocate dead particle array then add new index to the end. */
+	/* Allocate new memory */
+	new_data = MEM_callocN((deadpars->capacity + 1000)*sizeof(int), "dead particles");
+
+	/* Copy old data to newly allocated memory. */
+	memcpy(new_data, deadpars->data, deadpars->capacity * sizeof(int));
+
+	/* Free old memory. */
+	MEM_freeN(deadpars->data);
+
+	/* Set pointer to new memory. */
+	deadpars->data = new_data;
+
+	/* Add new index to end, update size and capacity. */
+	*(deadpars->data + deadpars->size) = index;
+	deadpars->size++;
+	deadpars->capacity += 1000;
+}
+
 /* Sample the density field at a point in space. */
 void psys_sph_sample(BVHTree *tree, SPHData *sphdata, float co[3], SPHParams *params)
 {
@@ -721,6 +760,9 @@ void BPH_sph_unsplit_particle(ParticleSimulationData *sim, float cfra)
 
 	psys_sph_init(sim, &sphdata);
 
+	if(!psys->deadpars.data)
+		psys_deadpars_init(&psys->deadpars);
+
 	LOOP_DYNAMIC_PARTICLES{
 		/* Unsplit outside splitting region only */
 		if((pa->alive != PARS_ALIVE || pa->sphmassfac > 0.91f)){
@@ -784,6 +826,8 @@ void BPH_sph_unsplit_particle(ParticleSimulationData *sim, float cfra)
 		/* -- Kill other particle. */
 		npa->dietime = cfra + 0.001/((float)(psys->part->subframes + 1));
 		npa->alive = PARS_DEAD;
+
+		//psys_deadpars_add(&psys->deadpars, index_n);
 	}
 }
 
@@ -1004,7 +1048,8 @@ void BPH_sph_split_particle(ParticleSimulationData *sim, int index, float cfra)
 	ParticleSettings *part = psys->part;
 	ParticleData *pa, *new_pa;
 	int oldtotpart = psys->totpart;
-	int newtotpart = oldtotpart+8;
+	int newtotpart;
+	int newparticles = 8-psys->deadpars.size;
 	int i;
 
 	pa = psys->particles+index;
@@ -1016,30 +1061,51 @@ void BPH_sph_split_particle(ParticleSimulationData *sim, int index, float cfra)
 	   return;
 
 	if(pa->split == PARS_UNSPLIT){
-		/* Re-allocate particles array */
-		realloc_particles(sim, newtotpart);
-		pa = psys->particles+index;
-
 		pa->split = PARS_SPLIT;
 		pa->sphalpha = 0.75f;
 		pa->sphmassfac = 0.2f;
 
-		/* Make copies of parent particle at end of particles array */
-		for(i = 0; i < 8; i++){
-			new_pa = psys->particles+oldtotpart+i;
+		if(newparticles > 0){
+			/* Re-allocate particles array. */
+			newtotpart = oldtotpart+newparticles;
+			realloc_particles(sim, newtotpart);
+			pa = psys->particles+index;
+
+			/* Make copies of parent particle at end of particles array. */
+			for(i = 0; i < newparticles; i++){
+				new_pa = psys->particles+oldtotpart+i;
+				memcpy(new_pa, pa, sizeof(ParticleData));
+				new_pa->sphmassfac = 0.1f;
+
+				/* Set position for new particle. */
+				split_positions(sim, new_pa, i+1);
+
+				/* Set birth time. Offset to avoid particle reset. */
+				psys -> particles[oldtotpart+i].time = cfra - 0.001/((float)(part->subframes + 1));
+			}
+			/* Update ParticleSettings->totpart.
+				  ParticleSystem->totpart? */
+			psys->part->totpart = newtotpart;
+			psys->totadded += newparticles;
+		}
+		else
+			newparticles = 0;
+
+		for(i = 0; i < 8 - newparticles; i++){
+			new_pa = psys->particles+psys->deadpars.data[psys->deadpars.size-i];
 			memcpy(new_pa, pa, sizeof(ParticleData));
 			new_pa->sphmassfac = 0.1f;
 
-			/* Set position for new particle */
-			split_positions(sim, new_pa, i+1);
+			/* Set position for new particle. */
+			split_positions(sim, new_pa, newparticles+i+1);
 
-			/* Set birth time. Offset to avoid particle reset. Is this robust though?*/
-			psys -> particles[oldtotpart+i].time = cfra - 0.001/((float)(part->subframes + 1));
+			/* Set birth time. Offset to avoid particle reset. */
+			new_pa->alive = PARS_ALIVE;
+			new_pa->time = cfra - 0.001/((float)(part->subframes + 1));
+			//psys -> particles[oldtotpart+i].time = cfra - 0.001/((float)(part->subframes + 1));
+
+			psys->deadpars.size--;
 		}
-		/* Update ParticleSettings->totpart.
-				  ParticleSystem->totpart? */
-		psys->part->totpart = newtotpart;
-		psys->totsplit += 1;
 	}
 }
 
@@ -1098,7 +1164,7 @@ void BPH_sph_planar_split(ParticleSimulationData *sim, int index, float cfra)
 		/* Update ParticleSettings->totpart.
 				  ParticleSystem->totpart? */
 		psys->part->totpart = newtotpart;
-		psys->totsplit += 1;
+		psys->totadded += 2;
 	}
 }
 
