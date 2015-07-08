@@ -307,6 +307,13 @@ int psys_get_tot_child(Scene *scene, ParticleSystem *psys)
 	return psys->totpart*psys_get_child_number(scene, psys);
 }
 
+void psys_deadpars_init(DeadParticles* deadpars)
+{
+	deadpars->data = MEM_callocN(1000*sizeof(int), "dead particles");
+	deadpars->capacity = 1000;
+	deadpars->size= 0;
+}
+
 /************************************************/
 /*			Distribution						*/
 /************************************************/
@@ -2893,20 +2900,25 @@ static void dynamics_step(ParticleSimulationData *sim, float cfra)
 			else {
 			  /* SPH_SOLVER_CLASSICAL */
 #if 1
-		    /* ADAPTIVE RESOLUTION */
-		    /* Adaptive resolution method based on the work of Feldman and
-		     * Bonet 2007 and Vacondio et al. 2013. */
-		    if (cfra > 799 && cfra < 50000) {
-				LOOP_DYNAMIC_PARTICLES{
-					if(pa->alive == PARS_ALIVE && pa->split == PARS_UNSPLIT){
-						BPH_sph_split_particle(sim, p, cfra);
-						//BPH_sph_planar_split(sim, p, cfra);
-					}
-			    }
-			}
-		    if (cfra > 799 && cfra < 50000){
-				BPH_sph_unsplit_particle(sim, cfra);
-			}
+			  /* ADAPTIVE RESOLUTION */
+			  /* Adaptive resolution method based on the work of Feldman and
+			  * Bonet 2007 and Vacondio et al. 2013. */
+
+			  /* Initialize storage for dead particle re-use */
+			  if(cfra == 1)
+				  psys_deadpars_init(&psys->deadpars);
+
+			  if (cfra > 0 && cfra < 50000) {
+				  LOOP_DYNAMIC_PARTICLES{
+					  if(pa->alive == PARS_ALIVE && pa->split == PARS_UNSPLIT){
+						  BPH_sph_split_particle(sim, p, cfra);
+						  //BPH_sph_planar_split(sim, p, cfra);
+					  }
+				  }
+			  }
+			  if (cfra > 0 && cfra < 25){
+				  BPH_sph_unsplit_particle(sim, cfra);
+			  }
 #endif
 			  /* Apply SPH forces using classical algorithm (due to Gingold
 			   * and Monaghan). Note that, unlike double-density relaxation,

@@ -613,13 +613,6 @@ void psys_sph_finalise(SPHData *sphdata)
 	}
 }
 
-void psys_deadpars_init(DeadParticles* deadpars)
-{
-	deadpars->data = MEM_callocN(1000*sizeof(int), "dead particles");
-	deadpars->capacity = 1000;
-	deadpars->size= 0;
-}
-
 void psys_deadpars_add(DeadParticles* deadpars, int index)
 {
 	int *new_data;
@@ -630,8 +623,6 @@ void psys_deadpars_add(DeadParticles* deadpars, int index)
 		deadpars->size++;
 		return;
 	}
-
-	printf("Increasing capacity of deadpars\n");
 
 	/* Otherwise reallocate dead particle array then add new index to the end. */
 	/* Allocate new memory */
@@ -1083,8 +1074,7 @@ void BPH_sph_split_particle(ParticleSimulationData *sim, int index, float cfra)
 				/* Set birth time. Offset to avoid particle reset. */
 				psys -> particles[oldtotpart+i].time = cfra - 0.001/((float)(part->subframes + 1));
 			}
-			/* Update ParticleSettings->totpart.
-				  ParticleSystem->totpart? */
+			/* Update ParticleSettings->totpart. */
 			psys->part->totpart = newtotpart;
 			psys->totadded += newparticles;
 		}
