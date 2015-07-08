@@ -827,7 +827,7 @@ void BPH_sph_unsplit_particle(ParticleSimulationData *sim, float cfra)
 		npa->dietime = cfra + 0.001/((float)(psys->part->subframes + 1));
 		npa->alive = PARS_DEAD;
 
-		//psys_deadpars_add(&psys->deadpars, index_n);
+		psys_deadpars_add(&psys->deadpars, index_n);
 	}
 }
 
@@ -1092,7 +1092,7 @@ void BPH_sph_split_particle(ParticleSimulationData *sim, int index, float cfra)
 			newparticles = 0;
 
 		for(i = 0; i < 8 - newparticles; i++){
-			new_pa = psys->particles+psys->deadpars.data[psys->deadpars.size-i];
+			new_pa = psys->particles+psys->deadpars.data[psys->deadpars.size-1-i];
 			memcpy(new_pa, pa, sizeof(ParticleData));
 			new_pa->sphmassfac = 0.1f;
 
@@ -1103,9 +1103,8 @@ void BPH_sph_split_particle(ParticleSimulationData *sim, int index, float cfra)
 			new_pa->alive = PARS_ALIVE;
 			new_pa->time = cfra - 0.001/((float)(part->subframes + 1));
 			//psys -> particles[oldtotpart+i].time = cfra - 0.001/((float)(part->subframes + 1));
-
-			psys->deadpars.size--;
 		}
+		psys->deadpars.size -= 8 - newparticles;
 	}
 }
 

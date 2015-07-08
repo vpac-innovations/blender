@@ -1168,6 +1168,8 @@ void BKE_ptcache_id_from_particles(PTCacheID *pid, Object *ob, ParticleSystem *p
 		pid->write_extra_data = ptcache_particle_extra_write;
 		pid->read_extra_data = ptcache_particle_extra_read;
 	}
+	else if (psys->part->phystype == PART_PHYS_FLUID && psys->part->fluid->solver == SPH_SOLVER_CLASSICAL)
+		pid->data_types |= (1<<BPHYS_DATA_TIMES);
 
 	if (psys->part->flag & PART_ROTATIONS) {
 		pid->data_types|= (1<<BPHYS_DATA_ROTATION);
