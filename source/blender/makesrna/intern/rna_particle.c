@@ -1720,6 +1720,12 @@ static void rna_def_fluid_settings(BlenderRNA *brna)
 	                         "Density is calculated as a factor of default density (depends on particle size)");
 	RNA_def_property_update(prop, 0, "rna_Particle_reset");
 
+	prop = RNA_def_property(srna, "use_adptv_resolution", PROP_BOOLEAN, PROP_NONE);
+	RNA_def_property_boolean_sdna(prop, NULL, "flag", SPH_FAC_ADPTV_RES);
+	RNA_def_property_ui_text(prop, "Adaptive Resolution",
+	                         "Apply particle splitting/coalescing in defined regions");
+	RNA_def_property_update(prop, 0, "rna_Particle_reset");
+
 	prop = RNA_def_property(srna, "factor_radius", PROP_BOOLEAN, PROP_NONE);
 	RNA_def_property_boolean_sdna(prop, NULL, "flag", SPH_FAC_RADIUS);
 	RNA_def_property_ui_text(prop, "Factor Radius", "Interaction radius is a factor of 4 * particle size");

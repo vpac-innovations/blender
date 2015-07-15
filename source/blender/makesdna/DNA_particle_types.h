@@ -157,6 +157,7 @@ typedef struct DeadParticles{
 #define SPH_FAC_RADIUS				16
 #define SPH_FAC_VISCOSITY			32
 #define SPH_FAC_REST_LENGTH			64
+#define SPH_FAC_ADPTV_RES			128
 
 /* fluid->solver (numerical ID field, not bitfield) */
 #define SPH_SOLVER_DDR					0

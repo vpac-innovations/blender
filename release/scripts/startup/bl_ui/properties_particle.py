@@ -636,6 +636,9 @@ class PARTICLE_PT_physics(ParticleButtonsPanel, Panel):
                 sub.prop(fluid, "rest_density", slider=fluid.use_factor_density)
                 sub.prop(fluid, "use_factor_density", text="")
 
+                sub = col.row()
+                sub.prop(fluid, "use_adptv_resolution")
+
                 if fluid.solver == 'CLASSICAL':
                     # With the classical solver, it is possible to calculate the
                     # spacing between particles when the fluid is at rest. This
