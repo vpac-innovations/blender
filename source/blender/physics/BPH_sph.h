@@ -97,6 +97,20 @@ typedef struct SPHData {
   void (*equation_of_state) (struct SPHData *sphdata, SPHParams *params);
 } SPHData;
 
+typedef struct SPHRefiner {
+	struct SPHRefiner *next, *prev;
+	float co[3];
+	float radius;
+	/* TODO: Add some way of flagging point refiner or surface refiner.
+	 * Surface refiner will need to be associated with a parent object
+	 * and will need to know which mesh surfaces apply refinement.
+	 *
+	 * Can point refiners be associated with a parent object?
+	 *
+	 * Expose all/some of this through Python API in order to develop
+	 * an automatic feature detection script? */
+} SPHRefiner;
+
 /* General SPH functions */
 void BPH_sph_unsplit_particle(struct ParticleSimulationData *sim, float cfra);
 void BPH_sph_split_particle(struct ParticleSimulationData *sim, int index, float cfra);
@@ -107,6 +121,12 @@ void BPH_sphDDR_step(struct ParticleSimulationData *sim, float dtime, float cfra
 
 /* Classical SPH only functions */
 void BPH_sphclassical_step(struct ParticleSimulationData *sim, float dtime, float cfra);
+
+/* Adaptive resolution */
+void BPH_sph_refiners_init(struct ListBase **refiners, struct ParticleSystem *psys);
+void BPH_sph_refiners_end(struct ListBase **refiners);
+void BPH_sph_refiners_add(struct ListBase **refiners);
+void BPH_sph_refiners_remove(struct ListBase **refiners);
 
 void psys_sph_init(struct ParticleSimulationData *sim, SPHData *sphdata);
 void psys_sph_finalise(SPHData *sphdata);

@@ -702,12 +702,51 @@ static void sph_integrate(ParticleSimulationData *sim, ParticleData *pa, float d
   integrate_particle(part, pa, dtime, effector_acceleration, sphdata->force_cb, sphdata);
 }
 
-static int nearest_split(ParticleSystem *psys, SPHRangeData *pfr)
+static int split_through_wall_test(ParticleSimulationData *sim, ParticleData *pa, BVHTreeRayHit *hit)
+{
+	ColliderCache *coll;
+	ListBase *colliders = sim->colliders;
+	BVHTreeFromMesh treeData = {NULL};
+	Object *current;
+	float ray_start[3], ray_end[3], ray_dir[3], old_dist;
+
+	if(BLI_listbase_is_empty(colliders))
+		return 0;
+
+	copy_v3_v3(ray_start, pa->prev_state.co);
+	copy_v3_v3(ray_end, pa->state.co);
+
+	sub_v3_v3v3(ray_dir, ray_end, ray_start);
+	hit->index = -1;
+	hit->dist = len_v3(ray_dir);
+
+	/* Iterate over colliders and check for intersect */
+	for(coll=colliders->first; coll; coll=coll->next){
+		current = coll->ob;
+		old_dist = hit->dist;
+
+		bvhtree_from_mesh_faces(&treeData, current->derivedFinal, 0.0f, 4, 6);
+
+		/* Ray cast. */
+		BLI_bvhtree_ray_cast(treeData.tree, ray_start, ray_dir, pa->size, hit, treeData.raycast_callback, &treeData);
+
+		/* Throw out new hit distance if previous one was shorter. */
+		if(old_dist < hit->dist)
+			hit->dist = old_dist;
+
+		free_bvhtree_from_mesh(&treeData);
+	}
+	return hit->index >= 0;
+}
+
+static int nearest_split(ParticleSimulationData *sim, SPHRangeData *pfr)
 {
 	/* Since particles array is not being resized, use nearest
 	 * neighbour callback to efficiently find closest neighbour
 	 * particle */
-	ParticleData *pa = pfr->pa, *npa;
+	ParticleSystem *psys = sim->psys;
+	ParticleData *pa = pfr->pa, *npa, test_pa;
+	BVHTreeRayHit hit;
 	SPHNeighbor *pfn;
 	float min_dist = 2.f * pfr->h;
 	float dist, vec[3];
@@ -717,13 +756,18 @@ static int nearest_split(ParticleSystem *psys, SPHRangeData *pfr)
 	for(p=0; p < pfr->tot_neighbors; p++, pfn++){
 		npa = pfn->psys->particles + pfn->index;
 		if(pa->sphmassfac+npa->sphmassfac >= 1.05f || npa->alive != PARS_ALIVE ||
-		   ((npa->state.co[2] < 0.30) && (npa->state.co[2] > -0.030) &&
+		   ((npa->state.co[2] < 0.030) && (npa->state.co[2] > -0.030) &&
 		    (npa->state.co[1] < 0.030 && npa->state.co[1] > -0.030) &&
 		    (npa->state.co[0] < 0.030 && npa->state.co[0] > -0.030)) ||
 			npa == pa){
 			continue;
 		}
-
+/*
+		copy_particle_key(&test_pa.state, &npa->state, 0);
+		copy_particle_key(&test_pa.prev_state, &pa->state, 0);
+		if(split_through_wall_test(sim, &test_pa, &hit))
+			continue;
+*/
 		sub_v3_v3v3(vec, pa->state.co, npa->state.co);
 		dist = len_v3(vec);
 		if(dist < min_dist){
@@ -751,20 +795,24 @@ void BPH_sph_unsplit_particle(ParticleSimulationData *sim, float cfra)
 
 	psys_sph_init(sim, &sphdata);
 
-	if(!psys->deadpars.data)
-		psys_deadpars_init(&psys->deadpars);
-
 	LOOP_DYNAMIC_PARTICLES{
-		/* Unsplit outside splitting region only */
 		if((pa->alive != PARS_ALIVE || pa->sphmassfac > 0.91f)){
 			continue;
 		}
-		if(((pa->state.co[2] < 0.30 && pa->state.co[2] > -0.030) &&
-		(pa->state.co[1] < 0.030 && pa->state.co[1] > -0.030) &&
-		(pa->state.co[0] < 0.030 && pa->state.co[0] > -0.030))){
-			continue;
-		}
 
+		/* Check if particle is within range of a refiner */
+		if(((pa->state.co[2] < 0.030) && (pa->state.co[2] > -0.030) &&
+	     (pa->state.co[1] < 0.030 && pa->state.co[1] > -0.030) &&
+	     (pa->state.co[0] < 0.030 && pa->state.co[0] > -0.030)))
+			continue;
+		/*if(((pa->state.co[2] < 0.10) && (pa->state.co[2] > -0.60) &&
+		    (pa->state.co[1] < 2.000 && pa->state.co[1] > -2.000) &&
+		    (pa->state.co[0] < 2.000 && pa->state.co[0] > -2.000)) ||
+		   ((pa->state.co[2] < -3.90) && (pa->state.co[2] > -4.60) &&
+		    (pa->state.co[1] < 2.000 && pa->state.co[1] > -2.000) &&
+		    (pa->state.co[0] < 2.000 && pa->state.co[0] > -2.000))){
+			continue;
+		}*/
 		pfr.h = h;
 		pfr.pa = pa;
 
@@ -772,7 +820,7 @@ void BPH_sph_unsplit_particle(ParticleSimulationData *sim, float cfra)
 		sph_evaluate_func(NULL, sphdata.psys, pa->state.co, &pfr, interaction_radius, sphclassical_neighbour_accum_cb);
 
 		/* Find index of nearest split particle */
-		index_n = nearest_split(psys, &pfr);
+		index_n = nearest_split(sim, &pfr);
 		if(index_n == 0)
 			continue;
 
@@ -817,46 +865,8 @@ void BPH_sph_unsplit_particle(ParticleSimulationData *sim, float cfra)
 		/* -- Kill other particle. */
 		npa->dietime = cfra + 0.001/((float)(psys->part->subframes + 1));
 		npa->alive = PARS_DEAD;
-
 		psys_deadpars_add(&psys->deadpars, index_n);
 	}
-}
-
-static int split_through_wall_test(ParticleSimulationData *sim, ParticleData *pa, BVHTreeRayHit *hit)
-{
-	ColliderCache *coll;
-	ListBase *colliders = sim->colliders;
-	BVHTreeFromMesh treeData = {NULL};
-	Object *current;
-	float ray_start[3], ray_end[3], ray_dir[3], old_dist;
-
-	if(BLI_listbase_is_empty(colliders))
-		return 0;
-
-	copy_v3_v3(ray_start, pa->prev_state.co);
-	copy_v3_v3(ray_end, pa->state.co);
-
-	sub_v3_v3v3(ray_dir, ray_end, ray_start);
-	hit->index = -1;
-	hit->dist = len_v3(ray_dir);
-
-	/* Iterate over colliders and check for intersect */
-	for(coll=colliders->first; coll; coll=coll->next){
-		current = coll->ob;
-		old_dist = hit->dist;
-
-		bvhtree_from_mesh_faces(&treeData, current->derivedFinal, 0.0f, 4, 6);
-
-		/* Ray cast. */
-		BLI_bvhtree_ray_cast(treeData.tree, ray_start, ray_dir, pa->size, hit, treeData.raycast_callback, &treeData);
-
-		/* Throw out new hit distance if previous one was shorter. */
-		if(old_dist < hit->dist)
-			hit->dist = old_dist;
-
-		free_bvhtree_from_mesh(&treeData);
-	}
-	return hit->index >= 0;
 }
 
 static void split_positions(ParticleSimulationData *sim, ParticleData *pa, int num)
@@ -1033,6 +1043,48 @@ static void split_positions(ParticleSimulationData *sim, ParticleData *pa, int n
 	}
 }
 
+void BPH_sph_refiners_init(ListBase **refiners, ParticleSystem *psys)
+{
+	SPHRefiner *refiner= MEM_callocN(sizeof(SPHRefiner), "SPHRefiner");
+
+	if(*refiners == NULL)
+		*refiners = MEM_callocN(sizeof(ListBase), "refiners list");
+
+	/* Add refiner(s) */
+	refiner->co[0] = 0.0f;
+	refiner->co[1] = 0.0f;
+	refiner->co[2] = 0.0f;
+	refiner->radius = 0.02f;
+
+	BLI_addtail(*refiners, refiner);
+}
+
+void BPH_sph_refiners_end(ListBase **refiners)
+{
+	if (*refiners) {
+		SPHRefiner *sref = (*refiners)->first;
+
+		BLI_freelistN(*refiners);
+		MEM_freeN(*refiners);
+		*refiners = NULL;
+	}
+}
+
+int check_refiners(ListBase *refiners, ParticleData *pa)
+{
+	SPHRefiner *sref;
+	float vec[3], dist;
+
+	if(refiners) for(sref = refiners->first; sref; sref=sref->next) {
+		sub_v3_v3v3(vec, pa->state.co, sref->co);
+		dist = len_v3(vec);
+		if (dist < sref->radius)
+			return 1;
+	}
+
+	return 0;
+}
+
 void BPH_sph_split_particle(ParticleSimulationData *sim, int index, float cfra)
 {
 	ParticleSystem *psys = sim->psys;
@@ -1045,11 +1097,22 @@ void BPH_sph_split_particle(ParticleSimulationData *sim, int index, float cfra)
 
 	pa = psys->particles+index;
 
-	/* Split particles in predefined box */
+	/* Check if particle is within a refinement zone */
+	if(!check_refiners(psys->refiners, pa))
+		return;
+
+	/* Split particles in predefined box
 	if((pa->state.co[2] > 0.020 || pa->state.co[2] < -0.020) ||
 	   (pa->state.co[1] > 0.020 || pa->state.co[1] < -0.020) ||
 	   (pa->state.co[0] > 0.020 || pa->state.co[0] < -0.020))
-	   return;
+		return;*/
+	/*if(((pa->state.co[2] > 0.000 || pa->state.co[2] < -0.50) ||
+	   (pa->state.co[1] > 2.000 || pa->state.co[1] < -2.00) ||
+	   (pa->state.co[0] > 2.000 || pa->state.co[0] < -2.000)) &&
+	   ((pa->state.co[2] > -4.00 || pa->state.co[2] < -4.500) ||
+	   (pa->state.co[1] > 2.000 || pa->state.co[1] < -2.000) ||
+	   (pa->state.co[0] > 2.000 || pa->state.co[0] < -2.000)))
+	   return;*/
 
 	if(pa->split == PARS_UNSPLIT){
 		pa->split = PARS_SPLIT;

@@ -616,6 +616,10 @@ class PARTICLE_PT_physics(ParticleButtonsPanel, Panel):
                 col.prop(fluid, "linear_viscosity", text="Viscosity")
                 col.prop(fluid, "buoyancy", text="Buoyancy", slider=True)
 
+                if fluid.solver == 'CLASSICAL':
+                    sub = col.row()
+                    sub.prop(fluid, "use_adptv_resolution")
+
                 col = split.column()
                 col.label(text="Advanced:")
 
@@ -635,9 +639,6 @@ class PARTICLE_PT_physics(ParticleButtonsPanel, Panel):
                 sub = col.row()
                 sub.prop(fluid, "rest_density", slider=fluid.use_factor_density)
                 sub.prop(fluid, "use_factor_density", text="")
-
-                sub = col.row()
-                sub.prop(fluid, "use_adptv_resolution")
 
                 if fluid.solver == 'CLASSICAL':
                     # With the classical solver, it is possible to calculate the

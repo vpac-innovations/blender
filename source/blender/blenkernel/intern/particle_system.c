@@ -2899,27 +2899,33 @@ static void dynamics_step(ParticleSimulationData *sim, float cfra)
 			}
 			else {
 			  /* SPH_SOLVER_CLASSICAL */
-#if 1
-			  /* ADAPTIVE RESOLUTION */
-			  /* Adaptive resolution method based on the work of Feldman and
-			  * Bonet 2007 and Vacondio et al. 2013. */
+			  if(part->fluid->flag & SPH_FAC_ADPTV_RES){
 
-			  /* Initialize storage for dead particle re-use */
-			  if(cfra == 1)
-				  psys_deadpars_init(&psys->deadpars);
+				  /* ADAPTIVE RESOLUTION */
+				  /* Adaptive resolution method based on the work of Feldman and
+				  * Bonet 2007 and Vacondio et al. 2013. */
 
-			  if (cfra > 0 && cfra < 50000) {
-				  LOOP_DYNAMIC_PARTICLES{
-					  if(pa->alive == PARS_ALIVE && pa->split == PARS_UNSPLIT){
-						  BPH_sph_split_particle(sim, p, cfra);
-						  //BPH_sph_planar_split(sim, p, cfra);
+				  /* Initialize storage for dead particle re-use */
+				  if(cfra == 1){
+					  psys_deadpars_init(&psys->deadpars);
+				  }
+
+				  /* Update/initialize refiners */
+				  BPH_sph_refiners_init(&psys->refiners, psys);
+
+				  if (cfra > 9 && cfra < 50000) {
+					  LOOP_DYNAMIC_PARTICLES{
+						  if(pa->alive == PARS_ALIVE && pa->split == PARS_UNSPLIT){
+							  BPH_sph_split_particle(sim, p, cfra);
+							  //BPH_sph_planar_split(sim, p, cfra);
+						  }
 					  }
 				  }
+				  if (cfra > 9 && cfra < 50000){
+					  BPH_sph_unsplit_particle(sim, cfra);
+				  }
 			  }
-			  if (cfra > 0 && cfra < 25){
-				  BPH_sph_unsplit_particle(sim, cfra);
-			  }
-#endif
+
 			  /* Apply SPH forces using classical algorithm (due to Gingold
 			   * and Monaghan). Note that, unlike double-density relaxation,
 			   * this algorithm is separated into distinct loops. */
@@ -3355,7 +3361,7 @@ static void fluid_default_settings(ParticleSettings *part)
 	fluid->rest_density = 1.f;
 	fluid->buoyancy = 0.f;
 	fluid->radius = 1.f;
-	fluid->flag |= SPH_FAC_REPULSION|SPH_FAC_DENSITY|SPH_FAC_RADIUS|SPH_FAC_VISCOSITY|SPH_FAC_REST_LENGTH;
+	fluid->flag |= SPH_FAC_REPULSION|SPH_FAC_DENSITY|SPH_FAC_RADIUS|SPH_FAC_VISCOSITY|SPH_FAC_REST_LENGTH|SPH_FAC_ADPTV_RES;
 }
 
 static void psys_prepare_physics(ParticleSimulationData *sim)

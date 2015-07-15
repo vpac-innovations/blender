@@ -121,12 +121,12 @@ typedef struct ParticleData {
 	float sphmassfac;		/* mass factor for adaptive resolution */
 	float sphalpha;			/* smoothing length factor for adaptive resolution */
 
-	short pad;
-	short split;			/* splitting status of a particle*/
-
 	int hair_index;
 	short flag;
 	short alive;			/* the life state of a particle */
+
+	short split;			/* splitting status of a particle*/
+	short pad;
 } ParticleData;
 
 typedef struct SPHFluidSettings {
@@ -323,6 +323,7 @@ typedef struct ParticleSystem {
 	struct ListBase ptcaches;
 
 	struct ListBase *effectors;
+	struct ListBase *refiners;
 
 	ParticleSpring *fluid_springs;
 	int tot_fluidsprings, alloc_fluidsprings;
