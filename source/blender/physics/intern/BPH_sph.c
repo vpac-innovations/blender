@@ -55,17 +55,6 @@ static ThreadRWMutex psys_bvhtree_rwlock = BLI_RWLOCK_INITIALIZER;
 
 #define PSYS_FLUID_SPRINGS_INITIAL_SIZE 256
 
-PartRefine *object_add_refiner(int type)
-{
-	PartRefine *pr;
-
-	pr= MEM_callocN(sizeof(PartRefine), "PartRefine");
-
-	pr->flag = type;
-
-	return pr;
-}
-
 /* Calculate the speed of the particle relative to the local scale of the
  * simulation. This should be called once per particle during a simulation
  * step, after the velocity has been updated. element_size defines the scale of                                                                        

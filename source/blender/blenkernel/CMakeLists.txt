@@ -144,6 +144,7 @@ set(SRC
 	intern/pbvh_bmesh.c
 	intern/pointcache.c
 	intern/property.c
+	intern/refine.c
 	intern/report.c
 	intern/rigidbody.c
 	intern/sca.c
@@ -250,6 +251,7 @@ set(SRC
 	BKE_pbvh.h
 	BKE_pointcache.h
 	BKE_property.h
+	BKE_refine.h
 	BKE_report.h
 	BKE_rigidbody.h
 	BKE_sca.h

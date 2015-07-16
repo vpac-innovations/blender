@@ -75,6 +75,7 @@
 #include "BKE_object.h"
 #include "BKE_pointcache.h"
 #include "BKE_property.h"
+#include "BKE_refine.h"
 #include "BKE_sca.h"
 #include "BKE_softbody.h"
 #include "BKE_modifier.h"
@@ -94,8 +95,6 @@
 #include "RNA_access.h"
 #include "RNA_define.h"
 #include "RNA_enum_types.h"
-
-#include "BPH_sph.h"
 
 /* for menu/popup icons etc etc*/
 

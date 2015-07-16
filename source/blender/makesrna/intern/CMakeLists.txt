@@ -68,6 +68,7 @@ set(DEFSRC
 	rna_nodetree.c
 	rna_object.c
 	rna_object_force.c
+	rna_object_refine.c
 	rna_packedfile.c
 	rna_particle.c
 	rna_pose.c
