@@ -619,6 +619,8 @@ class PARTICLE_PT_physics(ParticleButtonsPanel, Panel):
                 if fluid.solver == 'CLASSICAL':
                     sub = col.row()
                     sub.prop(fluid, "use_adptv_resolution")
+                    if fluid.use_adptv_resolution:
+                        layout.label(text="See physics tab to add refiner modifiers to objects.")
 
                 col = split.column()
                 col.label(text="Advanced:")

@@ -71,6 +71,11 @@ class PHYSICS_PT_add(PhysicButtonsPanel, Panel):
         else:
             col.operator("object.forcefield_toggle", text="Force Field", icon='X')
 
+        if obj.field.type == 'NONE':
+            col.operator("object.refiner_toggle", text="Refiner", icon='PARTICLES')
+        else:
+            col.operator("object.refiner_toggle", text="Refiner", icon='X')
+
         if obj.type == 'MESH':
             physics_add(self, col, context.collision, "Collision", 'COLLISION', 'MOD_PHYSICS', False)
             physics_add(self, col, context.cloth, "Cloth", 'CLOTH', 'MOD_CLOTH', True)

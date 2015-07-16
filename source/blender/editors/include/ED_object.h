@@ -217,6 +217,7 @@ struct EnumPropertyItem *ED_object_vgroup_selection_itemf_helper(
         const unsigned int selection_mask);
 
 void ED_object_check_force_modifiers(struct Main *bmain, struct Scene *scene, struct Object *object);
+void ED_object_check_refiner_modifiers(struct Main *bmain, struct Scene *scene, struct Object *object);
 
 #ifdef __cplusplus
 }

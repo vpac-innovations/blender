@@ -123,6 +123,7 @@ void BPH_sphDDR_step(struct ParticleSimulationData *sim, float dtime, float cfra
 void BPH_sphclassical_step(struct ParticleSimulationData *sim, float dtime, float cfra);
 
 /* Adaptive resolution */
+struct PartRefine *object_add_refiner(int type);
 void BPH_sph_refiners_init(struct ListBase **refiners, struct ParticleSystem *psys);
 void BPH_sph_refiners_end(struct ListBase **refiners);
 void BPH_sph_refiners_add(struct ListBase **refiners);

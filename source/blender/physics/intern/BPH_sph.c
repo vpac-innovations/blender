@@ -36,6 +36,7 @@
 
 #include "DNA_particle_types.h"
 #include "DNA_object_types.h"
+#include "DNA_object_refiner.h"
 #include "DNA_scene_types.h"
 
 #include "BLI_math.h"
@@ -53,6 +54,17 @@
 static ThreadRWMutex psys_bvhtree_rwlock = BLI_RWLOCK_INITIALIZER;
 
 #define PSYS_FLUID_SPRINGS_INITIAL_SIZE 256
+
+PartRefine *object_add_refiner(int type)
+{
+	PartRefine *pr;
+
+	pr= MEM_callocN(sizeof(PartRefine), "PartRefine");
+
+	pr->flag = type;
+
+	return pr;
+}
 
 /* Calculate the speed of the particle relative to the local scale of the
  * simulation. This should be called once per particle during a simulation
@@ -1100,19 +1112,6 @@ void BPH_sph_split_particle(ParticleSimulationData *sim, int index, float cfra)
 	/* Check if particle is within a refinement zone */
 	if(!check_refiners(psys->refiners, pa))
 		return;
-
-	/* Split particles in predefined box
-	if((pa->state.co[2] > 0.020 || pa->state.co[2] < -0.020) ||
-	   (pa->state.co[1] > 0.020 || pa->state.co[1] < -0.020) ||
-	   (pa->state.co[0] > 0.020 || pa->state.co[0] < -0.020))
-		return;*/
-	/*if(((pa->state.co[2] > 0.000 || pa->state.co[2] < -0.50) ||
-	   (pa->state.co[1] > 2.000 || pa->state.co[1] < -2.00) ||
-	   (pa->state.co[0] > 2.000 || pa->state.co[0] < -2.000)) &&
-	   ((pa->state.co[2] > -4.00 || pa->state.co[2] < -4.500) ||
-	   (pa->state.co[1] > 2.000 || pa->state.co[1] < -2.000) ||
-	   (pa->state.co[0] > 2.000 || pa->state.co[0] < -2.000)))
-	   return;*/
 
 	if(pa->split == PARS_UNSPLIT){
 		pa->split = PARS_SPLIT;

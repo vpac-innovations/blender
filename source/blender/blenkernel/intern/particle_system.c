@@ -2900,7 +2900,6 @@ static void dynamics_step(ParticleSimulationData *sim, float cfra)
 			else {
 			  /* SPH_SOLVER_CLASSICAL */
 			  if(part->fluid->flag & SPH_FAC_ADPTV_RES){
-
 				  /* ADAPTIVE RESOLUTION */
 				  /* Adaptive resolution method based on the work of Feldman and
 				  * Bonet 2007 and Vacondio et al. 2013. */

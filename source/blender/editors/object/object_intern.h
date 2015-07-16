@@ -94,6 +94,7 @@ void OBJECT_OT_paths_calculate(struct wmOperatorType *ot);
 void OBJECT_OT_paths_update(struct wmOperatorType *ot);
 void OBJECT_OT_paths_clear(struct wmOperatorType *ot);
 void OBJECT_OT_forcefield_toggle(struct wmOperatorType *ot);
+void OBJECT_OT_refiner_toggle(struct wmOperatorType *ot);
 
 void OBJECT_OT_game_property_new(struct wmOperatorType *ot);
 void OBJECT_OT_game_property_remove(struct wmOperatorType *ot);
