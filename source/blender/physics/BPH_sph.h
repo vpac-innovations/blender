@@ -99,8 +99,12 @@ typedef struct SPHData {
 
 typedef struct SPHRefiner {
 	struct SPHRefiner *next, *prev;
+	struct PartRefine *pr;
+	struct Object *ob;
+	struct Scene *scene;
 	float co[3];
 	float radius;
+
 	/* TODO: Add some way of flagging point refiner or surface refiner.
 	 * Surface refiner will need to be associated with a parent object
 	 * and will need to know which mesh surfaces apply refinement.
@@ -125,7 +129,7 @@ void BPH_sphclassical_step(struct ParticleSimulationData *sim, float dtime, floa
 /* Adaptive resolution */
 void BPH_sph_refiners_init(struct ListBase **refiners, struct ParticleSystem *psys);
 void BPH_sph_refiners_end(struct ListBase **refiners);
-void BPH_sph_refiners_add(struct ListBase **refiners);
+void sphclassical_refiners_add(struct ListBase **refiners);
 void BPH_sph_refiners_remove(struct ListBase **refiners);
 
 void psys_sph_init(struct ParticleSimulationData *sim, SPHData *sphdata);

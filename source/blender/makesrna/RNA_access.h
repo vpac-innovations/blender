@@ -466,6 +466,7 @@ extern StructRNA RNA_QuickTimeSettings;
 extern StructRNA RNA_RadarSensor;
 extern StructRNA RNA_RandomSensor;
 extern StructRNA RNA_RaySensor;
+extern StructRNA RNA_RefinerSettings;
 extern StructRNA RNA_Region;
 extern StructRNA RNA_RenderEngine;
 extern StructRNA RNA_RenderLayer;

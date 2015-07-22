@@ -45,9 +45,10 @@
 #include "BLI_edgehash.h"
 #include "BLI_listbase.h"
 
-#include "BKE_particle.h"
-#include "BKE_collision.h"
 #include "BKE_bvhutils.h"
+#include "BKE_collision.h"
+#include "BKE_particle.h"
+#include "BKE_refine.h"
 
 #include "BPH_sph.h"
 
@@ -1060,7 +1061,12 @@ void BPH_sph_refiners_init(ListBase **refiners, ParticleSystem *psys)
 	BLI_addtail(*refiners, refiner);
 }
 
-void BPH_sph_refiners_end(ListBase **refiners)
+void BPH_sph_refiners_add(ListBase **refiners)
+{
+
+}
+
+void sphclassical_refiners_end(ListBase **refiners)
 {
 	if (*refiners) {
 		SPHRefiner *sref = (*refiners)->first;
@@ -1071,7 +1077,7 @@ void BPH_sph_refiners_end(ListBase **refiners)
 	}
 }
 
-int check_refiners(ListBase *refiners, ParticleData *pa)
+static int sphclassical_check_refiners(ListBase *refiners, ParticleData *pa)
 {
 	SPHRefiner *sref;
 	float vec[3], dist;
@@ -1086,6 +1092,13 @@ int check_refiners(ListBase *refiners, ParticleData *pa)
 	return 0;
 }
 
+static void sphclassical_update_refiners(ParticleSimulationData *sim)
+{
+	sphclassical_refiners_end(&sim->psys->refiners);
+	sim->psys->refiners = prInitRefiners(sim->scene, sim->ob, sim->psys);
+}
+
+
 void BPH_sph_split_particle(ParticleSimulationData *sim, int index, float cfra)
 {
 	ParticleSystem *psys = sim->psys;
@@ -1099,7 +1112,7 @@ void BPH_sph_split_particle(ParticleSimulationData *sim, int index, float cfra)
 	pa = psys->particles+index;
 
 	/* Check if particle is within a refinement zone */
-	if(!check_refiners(psys->refiners, pa))
+	if(!sphclassical_check_refiners(psys->refiners, pa))
 		return;
 
 	if(pa->split == PARS_UNSPLIT){

@@ -1191,12 +1191,12 @@ static int refiner_toggle_exec(bContext *C, wmOperator *UNUSED(op))
 
 	if (ob->pr == NULL)
 		ob->pr = object_add_refiner(REFINE_OBJ);
-	else if (ob->pr->flag == 0)
-		ob->pr->flag = REFINE_OBJ;
+	else if (ob->pr->refine_type == 0)
+		ob->pr->refine_type = REFINE_OBJ;
 	else
-		ob->pr->flag = 0;
+		ob->pr->refine_type = 0;
 
-	ED_object_check_refiner_modifiers(CTX_data_main(C), CTX_data_scene(C), ob);
+	//ED_object_check_refiner_modifiers(CTX_data_main(C), CTX_data_scene(C), ob);
 	WM_event_add_notifier(C, NC_OBJECT | ND_DRAW, ob);
 	WM_event_add_notifier(C, NC_OBJECT | ND_MODIFIER, ob);
 
@@ -1205,10 +1205,9 @@ static int refiner_toggle_exec(bContext *C, wmOperator *UNUSED(op))
 
 void OBJECT_OT_refiner_toggle(wmOperatorType *ot)
 {
-
 	/* identifiers */
 	ot->name = "Toggle Refiner";
-	ot->description = "Make object a refiner for classical SPH";
+	ot->description = "Make object a refiner in classical SPH simulation";
 	ot->idname = "OBJECT_OT_refiner_toggle";
 
 	/* api callbacks */

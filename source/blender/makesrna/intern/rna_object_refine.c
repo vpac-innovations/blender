@@ -40,37 +40,81 @@
 
 #ifdef RNA_RUNTIME
 
+#include "BLI_math_base.h"
+
+#include "MEM_guardedalloc.h"
+
+#include "DNA_modifier_types.h"
+#include "DNA_texture_types.h"
+
+#include "BKE_context.h"
+#include "BKE_modifier.h"
+#include "BKE_pointcache.h"
+#include "BKE_depsgraph.h"
+
+#include "ED_object.h"
+
+static void rna_RefinerSettings_type_set(PointerRNA *ptr, int value)
+{
+	PartRefine *part_refine = (PartRefine *) ptr->data;
+
+	part_refine->refine_type = value;
+/*
+	if (!particle_id_check(ptr)) {
+		Object *ob = (Object *)ptr->id.data;
+		ob->pd->forcefield = value;
+		if (ELEM(value, PFIELD_WIND, PFIELD_VORTEX)) {
+			ob->empty_drawtype = OB_SINGLE_ARROW;
+		}
+		else {
+			ob->empty_drawtype = OB_PLAINAXES;
+		}
+	}*/
+}
+static char *rna_RefinerSettings_path(PointerRNA *ptr)
+{
+	PartRefine *pr = (PartRefine *)ptr->data;
+
+	/* Check through all possible places the settings can be to find the right one */
+	/* object refiner */
+	Object *ob = (Object *)ptr->id.data;
+
+	if (ob->pr == pr)
+		return BLI_sprintfN("refiner");
+
+	return NULL;
+}
 #else
-static void rna_def_field(BlenderRNA *brna)
+static void rna_def_refiner(BlenderRNA *brna)
 {
 	StructRNA *srna;
 	PropertyRNA *prop;
 
-	static EnumPropertyItem field_type_items[] = {
+	static EnumPropertyItem refiner_type_items[] = {
 	    {0, "NONE", 0, "None", ""},
 		{REFINE_OBJ, "REFINER", ICON_PARTICLES, "Refiner", "Refiner for classical SPH adaptive resolution"},
 	    {0, NULL, 0, NULL, NULL}
 	};
-/*
-	srna = RNA_def_struct(brna, "FieldSettings", NULL);
+
+	srna = RNA_def_struct(brna, "RefinerSettings", NULL);
 	RNA_def_struct_sdna(srna, "PartRefine");
-	RNA_def_struct_path_func(srna, "rna_FieldSettings_path");
-	RNA_def_struct_ui_text(srna, "Field Settings", "Field settings for an object in physics simulation");
-	RNA_def_struct_ui_icon(srna, ICON_PHYSICS);
+	RNA_def_struct_path_func(srna, "rna_RefinerSettings_path");
+	RNA_def_struct_ui_text(srna, "Refiner Settings", "Refiner settings for an object in physics simulation");
+	RNA_def_struct_ui_icon(srna, ICON_PARTICLES);
 
-	/* Enums *//*
+	/* Enums */
 
-	prop = RNA_def_property(srna, "refiner", PROP_ENUM, PROP_NONE);
-	RNA_def_property_enum_sdna(prop, NULL, "flag");
-	RNA_def_property_enum_items(prop, field_type_items);
-	RNA_def_property_enum_funcs(prop, NULL, "rna_FieldSettings_type_set", NULL);
+	prop = RNA_def_property(srna, "type", PROP_ENUM, PROP_NONE);
+	RNA_def_property_enum_sdna(prop, NULL, "refine_type");
+	RNA_def_property_enum_items(prop, refiner_type_items);
+	RNA_def_property_enum_funcs(prop, NULL, "rna_RefinerSettings_type_set", NULL);
 	RNA_def_property_ui_text(prop, "Refiner", "Is object a refiner");
-	RNA_def_property_update(prop, 0, "rna_FieldSettings_dependency_update");*/
+	//RNA_def_property_update(prop, 0, "rna_RefinerSettings_dependency_update");
 }
 
 void RNA_def_object_refine(BlenderRNA *brna)
 {
-	rna_def_field(brna);
+	rna_def_refiner(brna);
 }
 
 #endif

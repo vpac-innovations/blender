@@ -71,7 +71,7 @@ class PHYSICS_PT_add(PhysicButtonsPanel, Panel):
         else:
             col.operator("object.forcefield_toggle", text="Force Field", icon='X')
 
-        if obj.field.type == 'NONE':
+        if obj.refiner.type == 'NONE':
             col.operator("object.refiner_toggle", text="Refiner", icon='PARTICLES')
         else:
             col.operator("object.refiner_toggle", text="Refiner", icon='X')

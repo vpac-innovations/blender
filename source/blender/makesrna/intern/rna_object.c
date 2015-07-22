@@ -34,6 +34,7 @@
 #include "DNA_material_types.h"
 #include "DNA_mesh_types.h"
 #include "DNA_object_force.h"
+#include "DNA_object_refiner.h"
 #include "DNA_object_types.h"
 #include "DNA_property_types.h"
 #include "DNA_scene_types.h"
@@ -199,6 +200,7 @@ EnumPropertyItem object_axis_unsigned_items[] = {
 #include "BKE_material.h"
 #include "BKE_mesh.h"
 #include "BKE_particle.h"
+#include "BKE_refine.h"
 #include "BKE_scene.h"
 #include "BKE_deform.h"
 
@@ -1290,6 +1292,17 @@ static PointerRNA rna_Object_field_get(PointerRNA *ptr)
 		ob->pd = object_add_collision_fields(0);
 	
 	return rna_pointer_inherit_refine(ptr, &RNA_FieldSettings, ob->pd);
+}
+
+static PointerRNA rna_Object_refiner_get(PointerRNA *ptr)
+{
+	Object *ob = (Object *)ptr->id.data;
+
+	/* weak */
+	if (!ob->pr)
+		ob->pr = object_add_refiner(0);
+
+	return rna_pointer_inherit_refine(ptr, &RNA_RefinerSettings, ob->pr);
 }
 
 static PointerRNA rna_Object_collision_get(PointerRNA *ptr)
@@ -2524,6 +2537,12 @@ static void rna_def_object(BlenderRNA *brna)
 	RNA_def_property_struct_type(prop, "FieldSettings");
 	RNA_def_property_pointer_funcs(prop, "rna_Object_field_get", NULL, NULL, NULL);
 	RNA_def_property_ui_text(prop, "Field Settings", "Settings for using the object as a field in physics simulation");
+
+	prop = RNA_def_property(srna, "refiner", PROP_POINTER, PROP_NONE);
+	RNA_def_property_pointer_sdna(prop, NULL, "pr");
+	RNA_def_property_struct_type(prop, "RefinerSettings");
+	RNA_def_property_pointer_funcs(prop, "rna_Object_refiner_get", NULL, NULL, NULL);
+	RNA_def_property_ui_text(prop, "Refiner Settings", "Settings for using the object as a refiner in classical SPH simulation");
 
 	prop = RNA_def_property(srna, "collision", PROP_POINTER, PROP_NONE);
 	RNA_def_property_pointer_sdna(prop, NULL, "pd");

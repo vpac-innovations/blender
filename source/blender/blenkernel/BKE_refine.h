@@ -6,5 +6,6 @@
  */
 
 struct PartRefine *object_add_refiner(int type);
+struct ListBase *prInitRefiners();
 
 #endif

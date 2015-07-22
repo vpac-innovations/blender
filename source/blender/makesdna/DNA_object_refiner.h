@@ -11,7 +11,8 @@ typedef enum RefineType {
 } RefineType;
 
 typedef struct PartRefine {
-	int flag;
+	short refine_type;
+	short pad;
 } PartRefine;
 
 #ifdef __cplusplus
