@@ -38,6 +38,13 @@
 #include "WM_api.h"
 #include "WM_types.h"
 
+static EnumPropertyItem refiner_shape_items[] = {
+	{REFINE_SHAPE_SPHERE, "SPHERE", 0, "Sphere", ""},
+	{REFINE_SHAPE_BOX, "BOX", 0, "Box", ""},
+	{REFINE_SHAPE_FALLOFF, "FALLOFF", 0, "Falloff", ""},
+	{0, NULL, 0, NULL, NULL}
+};
+
 #ifdef RNA_RUNTIME
 
 #include "BLI_math_base.h"
@@ -53,6 +60,33 @@
 #include "BKE_depsgraph.h"
 
 #include "ED_object.h"
+
+static EnumPropertyItem point_shape_items[] = {
+	{REFINE_SHAPE_SPHERE, "SPHERE", 0, "Sphere", ""},
+	{REFINE_SHAPE_BOX, "BOX", 0, "Box", ""},
+	{0, NULL, 0, NULL, NULL}
+};
+
+static EnumPropertyItem surface_shape_items[] = {
+	{REFINE_SHAPE_FALLOFF, "FALLOFF", 0, "Falloff", ""},
+	{0, NULL, 0, NULL, NULL}
+};
+
+static EnumPropertyItem *rna_Refiner_shape_itemf(bContext *UNUSED(C), PointerRNA *ptr,
+                                                  PropertyRNA *UNUSED(prop), bool *UNUSED(r_free))
+{
+	Object *ob = NULL;
+
+	ob = (Object *)ptr->id.data;
+
+	if (ELEM(ob->type, OB_EMPTY))
+		return point_shape_items;
+
+	if (ELEM(ob->type, OB_MESH, OB_SURF))
+			return surface_shape_items;
+
+	return refiner_shape_items;
+}
 
 static void rna_RefinerSettings_type_set(PointerRNA *ptr, int value)
 {
@@ -109,7 +143,8 @@ static void rna_def_refiner(BlenderRNA *brna)
 
 	static EnumPropertyItem refiner_type_items[] = {
 	    {0, "NONE", 0, "None", ""},
-		{REFINE_OBJ, "REFINER", ICON_PARTICLES, "Refiner", "Refiner for classical SPH adaptive resolution"},
+	    {REFINE_POINT, "POINT", 0, "Point", "Refiner for classical SPH adaptive resolution"},
+	    {REFINE_SURFACE, "SURFACE", 0, "Surface", "Refiner for classical SPH adaptive resolution"},
 	    {0, NULL, 0, NULL, NULL}
 	};
 
@@ -127,6 +162,12 @@ static void rna_def_refiner(BlenderRNA *brna)
 	RNA_def_property_enum_funcs(prop, NULL, "rna_RefinerSettings_type_set", NULL);
 	RNA_def_property_ui_text(prop, "Refiner", "Is object a refiner");
 	//RNA_def_property_update(prop, 0, "rna_RefinerSettings_dependency_update");
+
+	prop = RNA_def_property(srna, "shape", PROP_ENUM, PROP_NONE);
+	RNA_def_property_enum_items(prop, refiner_shape_items);
+	RNA_def_property_enum_funcs(prop, NULL, NULL, "rna_Refiner_shape_itemf");
+	RNA_def_property_ui_text(prop, "Shape", "Shape of refinement region");
+	//RNA_def_property_update(prop, 0, "rna_RefinerSettings_shape_update");
 
 	/* Floats */
 	prop = RNA_def_property(srna, "radius", PROP_FLOAT, PROP_NONE);

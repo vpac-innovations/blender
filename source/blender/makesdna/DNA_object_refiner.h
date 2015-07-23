@@ -7,14 +7,20 @@ extern "C" {
 
 typedef enum RefineType {
 	REFINE_NULL = 0,
-	REFINE_OBJ  = 1,
+	REFINE_POINT  = 1,
+	REFINE_SURFACE = 2,
 } RefineType;
 
 typedef struct PartRefine {
 	short refine_type;
-	short pad;
+	short shape;
 	float radius;
 } PartRefine;
+
+/* pr-> shape */
+#define REFINE_SHAPE_SPHERE		0
+#define REFINE_SHAPE_BOX		1
+#define REFINE_SHAPE_FALLOFF	2
 
 #ifdef __cplusplus
 }

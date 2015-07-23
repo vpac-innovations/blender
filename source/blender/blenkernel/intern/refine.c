@@ -50,6 +50,15 @@ PartRefine *object_add_refiner(int type)
 	pr->refine_type = type;
 	pr->radius = 0.05f;
 
+	switch (type) {
+		case REFINE_POINT:
+			pr->shape = REFINE_SHAPE_SPHERE;
+			break;
+		case REFINE_SURFACE:
+			pr->shape = REFINE_SHAPE_FALLOFF;
+			break;
+	}
+
 	return pr;
 }
 

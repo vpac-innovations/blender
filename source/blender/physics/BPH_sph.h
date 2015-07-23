@@ -97,24 +97,6 @@ typedef struct SPHData {
   void (*equation_of_state) (struct SPHData *sphdata, SPHParams *params);
 } SPHData;
 
-typedef struct SPHRefiner {
-	struct SPHRefiner *next, *prev;
-	struct PartRefine *pr;
-	struct Object *ob;
-	struct Scene *scene;
-	float co[3];
-	float radius;
-
-	/* TODO: Add some way of flagging point refiner or surface refiner.
-	 * Surface refiner will need to be associated with a parent object
-	 * and will need to know which mesh surfaces apply refinement.
-	 *
-	 * Can point refiners be associated with a parent object?
-	 *
-	 * Expose all/some of this through Python API in order to develop
-	 * an automatic feature detection script? */
-} SPHRefiner;
-
 /* General SPH functions */
 void BPH_sph_unsplit_particle(struct ParticleSimulationData *sim, float cfra);
 void BPH_sph_split_particle(struct ParticleSimulationData *sim, int index, float cfra);

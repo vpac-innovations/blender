@@ -1190,9 +1190,9 @@ static int refiner_toggle_exec(bContext *C, wmOperator *UNUSED(op))
 	Object *ob = CTX_data_active_object(C);
 
 	if (ob->pr == NULL)
-		ob->pr = object_add_refiner(REFINE_OBJ);
+		ob->pr = object_add_refiner(REFINE_POINT);
 	else if (ob->pr->refine_type == 0)
-		ob->pr->refine_type = REFINE_OBJ;
+		ob->pr->refine_type = REFINE_POINT;
 	else
 		ob->pr->refine_type = 0;
 
