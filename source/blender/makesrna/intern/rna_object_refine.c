@@ -170,10 +170,23 @@ static void rna_def_refiner(BlenderRNA *brna)
 	//RNA_def_property_update(prop, 0, "rna_RefinerSettings_shape_update");
 
 	/* Floats */
+
 	prop = RNA_def_property(srna, "radius", PROP_FLOAT, PROP_NONE);
 	RNA_def_property_float_sdna(prop, NULL, "radius");
-	RNA_def_property_range(prop, -FLT_MAX, FLT_MAX);
+	RNA_def_property_range(prop, 0.0f, FLT_MAX);
 	RNA_def_property_ui_text(prop, "Radius", "Radius within which to apply splitting");
+	//RNA_def_property_update(prop, 0, "rna_RefinerSettings_update");
+
+	prop = RNA_def_property(srna, "maximum_mass", PROP_FLOAT, PROP_NONE);
+	RNA_def_property_float_sdna(prop, NULL, "max_mass");
+	RNA_def_property_range(prop, 0.0f, FLT_MAX);
+	RNA_def_property_ui_text(prop, "Maximum particle mass", "Upper limit for particle mass in refiner region");
+	//RNA_def_property_update(prop, 0, "rna_RefinerSettings_update");
+
+	prop = RNA_def_property(srna, "minimum_mass", PROP_FLOAT, PROP_NONE);
+	RNA_def_property_float_sdna(prop, NULL, "min_mass");
+	RNA_def_property_range(prop, 0.0f, FLT_MAX);
+	RNA_def_property_ui_text(prop, "Minimum particle mass", "Lower limit for particle mass in refiner region");
 	//RNA_def_property_update(prop, 0, "rna_RefinerSettings_update");
 }
 

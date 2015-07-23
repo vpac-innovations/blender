@@ -12,12 +12,14 @@ typedef enum RefineType {
 } RefineType;
 
 typedef struct PartRefine {
+	float radius;
+	float max_mass;
+	float min_mass;
 	short refine_type;
 	short shape;
-	float radius;
 } PartRefine;
 
-/* pr-> shape */
+/* pr->shape */
 #define REFINE_SHAPE_SPHERE		0
 #define REFINE_SHAPE_BOX		1
 #define REFINE_SHAPE_FALLOFF	2

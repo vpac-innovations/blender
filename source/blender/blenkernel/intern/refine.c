@@ -49,6 +49,8 @@ PartRefine *object_add_refiner(int type)
 
 	pr->refine_type = type;
 	pr->radius = 0.05f;
+	pr->max_mass = FLT_MAX;
+	pr->min_mass = 0.0f;
 
 	switch (type) {
 		case REFINE_POINT:
@@ -69,8 +71,6 @@ static SPHRefiner *new_sph_refiner(Scene *scene, Object *ob, PartRefine *pr)
 	refiner->scene = scene;
 	refiner->ob = ob;
 	refiner->pr = pr;
-
-	/* Add refiner(s) */
 	refiner->co[0] = ob->loc[0];
 	refiner->co[1] = ob->loc[1];
 	refiner->co[2] = ob->loc[2];
