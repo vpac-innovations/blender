@@ -48,11 +48,12 @@ PartRefine *object_add_refiner(int type)
 	pr = MEM_callocN(sizeof(PartRefine), "PartRefine");
 
 	pr->refine_type = type;
+	pr->radius = 0.05f;
 
 	return pr;
 }
 
-static SPHRefiner *new_sph_refiner(Scene *scene, Object *ob, PartRefine *pr, float length)
+static SPHRefiner *new_sph_refiner(Scene *scene, Object *ob, PartRefine *pr)
 {
 	SPHRefiner *refiner = MEM_callocN(sizeof(SPHRefiner), "SPHRefiner");
 
@@ -69,7 +70,7 @@ static SPHRefiner *new_sph_refiner(Scene *scene, Object *ob, PartRefine *pr, flo
 	return refiner;
 }
 
-static void add_object_to_refiners(ListBase **refiners, Scene *scene, Object *ob, Object *ob_src, float length)
+static void add_object_to_refiners(ListBase **refiners, Scene *scene, Object *ob, Object *ob_src)
 {
 	SPHRefiner *ref = NULL;
 
@@ -79,7 +80,7 @@ static void add_object_to_refiners(ListBase **refiners, Scene *scene, Object *ob
 	if (*refiners == NULL)
 		*refiners = MEM_callocN(sizeof(ListBase), "refiners list");
 
-	ref = new_sph_refiner(scene, ob, ob->pr, length);
+	ref = new_sph_refiner(scene, ob, ob->pr);
 
 	/* make sure imat is up to date */
 	invert_m4_m4(ob->imat, ob->obmat);
@@ -104,12 +105,11 @@ ListBase *prInitRefiners(Scene *scene, Object *ob_src, ParticleSystem *psys_src)
 	Base *base;
 	unsigned int layer= ob_src->lay;
 	ListBase *refiners = NULL;
-	float length = psys_src->part->fluid->radius;
 
 	for(base = scene->base.first; base; base = base->next) {
 		if ( (base->lay & layer) ) {
 			if (base->object->pr && base->object->pr->refine_type)
-				add_object_to_refiners(&refiners, scene, base->object, ob_src, length);
+				add_object_to_refiners(&refiners, scene, base->object, ob_src);
 		}
 	}
 
