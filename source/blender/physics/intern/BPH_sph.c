@@ -615,7 +615,7 @@ void psys_sph_finalise(SPHData *sphdata)
 	}
 }
 
-void psys_deadpars_add(DeadParticles* deadpars, int index)
+static void psys_deadpars_add(DeadParticles* deadpars, int index)
 {
 	int *new_data;
 
@@ -1061,28 +1061,13 @@ void BPH_sph_refiners_init(ListBase **refiners, ParticleSystem *psys)
 	BLI_addtail(*refiners, refiner);
 }
 
-void BPH_sph_refiners_add(ListBase **refiners)
-{
-
-}
-
-void sphclassical_refiners_end(ListBase **refiners)
-{
-	if (*refiners) {
-		SPHRefiner *sref = (*refiners)->first;
-
-		BLI_freelistN(*refiners);
-		MEM_freeN(*refiners);
-		*refiners = NULL;
-	}
-}
-
 static int sphclassical_check_refiners(ListBase *refiners, ParticleData *pa)
 {
 	SPHRefiner *sref;
 	float vec[3], dist;
 
 	if(refiners) for(sref = refiners->first; sref; sref=sref->next) {
+		printf("Radius: %f\n", sref->radius);
 		sub_v3_v3v3(vec, pa->state.co, sref->co);
 		dist = len_v3(vec);
 		if (dist < sref->radius)
@@ -1094,7 +1079,7 @@ static int sphclassical_check_refiners(ListBase *refiners, ParticleData *pa)
 
 static void sphclassical_update_refiners(ParticleSimulationData *sim)
 {
-	sphclassical_refiners_end(&sim->psys->refiners);
+	prEndRefiners(&sim->psys->refiners);
 	sim->psys->refiners = prInitRefiners(sim->scene, sim->ob, sim->psys);
 }
 
@@ -1108,6 +1093,8 @@ void BPH_sph_split_particle(ParticleSimulationData *sim, int index, float cfra)
 	int newtotpart;
 	int newparticles = 8-psys->deadpars.size;
 	int i;
+
+	sphclassical_update_refiners(sim);
 
 	pa = psys->particles+index;
 

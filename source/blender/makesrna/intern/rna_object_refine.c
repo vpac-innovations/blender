@@ -70,7 +70,24 @@ static void rna_RefinerSettings_type_set(PointerRNA *ptr, int value)
 			ob->empty_drawtype = OB_PLAINAXES;
 		}
 	}*/
-}
+}/*
+static void rna_RefinerSettings_dependency_update(Main *bmain, Scene *scene, PointerRNA *ptr)
+{
+	if (particle_id_check(ptr)) {
+		DAG_id_tag_update((ID *)ptr->id.data, OB_RECALC_OB | OB_RECALC_DATA | OB_RECALC_TIME | PSYS_RECALC_RESET);
+	}
+	else {
+		Object *ob = (Object *)ptr->id.data;
+
+		rna_FieldSettings_shape_update(bmain, scene, ptr);
+
+		DAG_relations_tag_update(bmain);
+
+		DAG_id_tag_update(&ob->id, OB_RECALC_OB);
+
+		WM_main_add_notifier(NC_OBJECT | ND_DRAW, ob);
+	}
+}*/
 static char *rna_RefinerSettings_path(PointerRNA *ptr)
 {
 	PartRefine *pr = (PartRefine *)ptr->data;
@@ -110,6 +127,13 @@ static void rna_def_refiner(BlenderRNA *brna)
 	RNA_def_property_enum_funcs(prop, NULL, "rna_RefinerSettings_type_set", NULL);
 	RNA_def_property_ui_text(prop, "Refiner", "Is object a refiner");
 	//RNA_def_property_update(prop, 0, "rna_RefinerSettings_dependency_update");
+
+	/* Floats */
+	prop = RNA_def_property(srna, "radius", PROP_FLOAT, PROP_NONE);
+	RNA_def_property_float_sdna(prop, NULL, "radius");
+	RNA_def_property_range(prop, -FLT_MAX, FLT_MAX);
+	RNA_def_property_ui_text(prop, "Radius", "Radius within which to apply splitting");
+	//RNA_def_property_update(prop, 0, "rna_RefinerSettings_update");
 }
 
 void RNA_def_object_refine(BlenderRNA *brna)

@@ -320,5 +320,17 @@ def basic_force_field_falloff_ui(self, context, field):
     sub.active = field.use_max_distance
     sub.prop(field, "distance_max", text="Maximum")
 
+def basic_refiner_settings_ui(self, context, refiner):
+    layout = self.layout
+
+    split = layout.split()
+
+    if not refiner or refiner.type == 'NONE':
+        return
+
+    col = split.column()
+
+    col.prop(refiner, "radius")
+
 if __name__ == "__main__":  # only for live edit.
     bpy.utils.register_module(__name__)

@@ -2910,7 +2910,7 @@ static void dynamics_step(ParticleSimulationData *sim, float cfra)
 				  }
 
 				  /* Update/initialize refiners */
-				  BPH_sph_refiners_init(&psys->refiners, psys);
+				  //BPH_sph_refiners_init(&psys->refiners, psys);
 
 				  if (cfra > 9 && cfra < 50000) {
 					  LOOP_DYNAMIC_PARTICLES{

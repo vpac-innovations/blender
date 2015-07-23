@@ -13,6 +13,7 @@ typedef enum RefineType {
 typedef struct PartRefine {
 	short refine_type;
 	short pad;
+	float radius;
 } PartRefine;
 
 #ifdef __cplusplus
