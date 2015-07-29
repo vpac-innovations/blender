@@ -38,13 +38,12 @@
 #include "WM_api.h"
 #include "WM_types.h"
 
-static EnumPropertyItem refiner_shape_items[] = {
-	{REFINE_SHAPE_SPHERE, "SPHERE", 0, "Sphere", ""},
-	{REFINE_SHAPE_BOX, "BOX", 0, "Box", ""},
-	{REFINE_SHAPE_FALLOFF, "FALLOFF", 0, "Falloff", ""},
-	{0, NULL, 0, NULL, NULL}
+static EnumPropertyItem refiner_type_items[] = {
+    {0, "NONE", 0, "None", ""},
+    {REFINE_POINT, "POINT", 0, "Point", "Refiner for classical SPH adaptive resolution"},
+    {REFINE_SURFACE, "SURFACE", 0, "Surface", "Refiner for classical SPH adaptive resolution"},
+    {0, NULL, 0, NULL, NULL}
 };
-
 #ifdef RNA_RUNTIME
 
 #include "BLI_math_base.h"
@@ -61,50 +60,60 @@ static EnumPropertyItem refiner_shape_items[] = {
 
 #include "ED_object.h"
 
-static EnumPropertyItem point_shape_items[] = {
-	{REFINE_SHAPE_SPHERE, "SPHERE", 0, "Sphere", ""},
-	{REFINE_SHAPE_BOX, "BOX", 0, "Box", ""},
+static int particle_id_check(PointerRNA *ptr)
+{
+	ID *id = ptr->id.data;
+
+	return (GS(id->name) == ID_PA);
+}
+
+static void rna_RefinerSettings_update(Main *UNUSED(bmain), Scene *UNUSED(scene), PointerRNA *ptr)
+{
+	Object *ob = (Object *)ptr->id.data;
+
+	DAG_id_tag_update(&ob->id, OB_RECALC_OB);
+	WM_main_add_notifier(NC_OBJECT | ND_DRAW, ob);
+}
+
+static EnumPropertyItem point_type_items[] = {
+	{0, "NONE", 0, "None", ""},
+	{REFINE_POINT, "POINT", 0, "Point", ""},
 	{0, NULL, 0, NULL, NULL}
 };
 
-static EnumPropertyItem surface_shape_items[] = {
-	{REFINE_SHAPE_FALLOFF, "FALLOFF", 0, "Falloff", ""},
+static EnumPropertyItem surface_type_items[] = {
+	{0, "NONE", 0, "None", ""},
+	{REFINE_POINT, "POINT", 0, "Point", ""},
+	{REFINE_SURFACE, "SURFACE", 0, "Surface", ""},
 	{0, NULL, 0, NULL, NULL}
 };
 
-static EnumPropertyItem *rna_Refiner_shape_itemf(bContext *UNUSED(C), PointerRNA *ptr,
-                                                  PropertyRNA *UNUSED(prop), bool *UNUSED(r_free))
+static EnumPropertyItem *rna_Refiner_type_itemf(bContext *UNUSED(C), PointerRNA *ptr,
+                                                 PropertyRNA *UNUSED(prop), bool *UNUSED(r_free))
 {
 	Object *ob = NULL;
 
 	ob = (Object *)ptr->id.data;
 
 	if (ELEM(ob->type, OB_EMPTY))
-		return point_shape_items;
+		return point_type_items;
 
 	if (ELEM(ob->type, OB_MESH, OB_SURF))
-			return surface_shape_items;
+			return surface_type_items;
 
-	return refiner_shape_items;
+	return refiner_type_items;
 }
 
-static void rna_RefinerSettings_type_set(PointerRNA *ptr, int value)
+static void rna_RefinerSettings_type_update(Main *bmain, Scene *scene, PointerRNA *ptr)
 {
-	PartRefine *part_refine = (PartRefine *) ptr->data;
-
-	part_refine->refine_type = value;
-/*
 	if (!particle_id_check(ptr)) {
 		Object *ob = (Object *)ptr->id.data;
-		ob->pd->forcefield = value;
-		if (ELEM(value, PFIELD_WIND, PFIELD_VORTEX)) {
-			ob->empty_drawtype = OB_SINGLE_ARROW;
-		}
-		else {
-			ob->empty_drawtype = OB_PLAINAXES;
-		}
-	}*/
-}/*
+		ED_object_check_refiner_modifiers(bmain, scene, ob);
+		WM_main_add_notifier(NC_OBJECT | ND_DRAW, ob);
+		WM_main_add_notifier(NC_OBJECT | ND_MODIFIER, ob);
+	}
+}
+/*
 static void rna_RefinerSettings_dependency_update(Main *bmain, Scene *scene, PointerRNA *ptr)
 {
 	if (particle_id_check(ptr)) {
@@ -141,13 +150,6 @@ static void rna_def_refiner(BlenderRNA *brna)
 	StructRNA *srna;
 	PropertyRNA *prop;
 
-	static EnumPropertyItem refiner_type_items[] = {
-	    {0, "NONE", 0, "None", ""},
-	    {REFINE_POINT, "POINT", 0, "Point", "Refiner for classical SPH adaptive resolution"},
-	    {REFINE_SURFACE, "SURFACE", 0, "Surface", "Refiner for classical SPH adaptive resolution"},
-	    {0, NULL, 0, NULL, NULL}
-	};
-
 	srna = RNA_def_struct(brna, "RefinerSettings", NULL);
 	RNA_def_struct_sdna(srna, "PartRefine");
 	RNA_def_struct_path_func(srna, "rna_RefinerSettings_path");
@@ -159,15 +161,9 @@ static void rna_def_refiner(BlenderRNA *brna)
 	prop = RNA_def_property(srna, "type", PROP_ENUM, PROP_NONE);
 	RNA_def_property_enum_sdna(prop, NULL, "refine_type");
 	RNA_def_property_enum_items(prop, refiner_type_items);
-	RNA_def_property_enum_funcs(prop, NULL, "rna_RefinerSettings_type_set", NULL);
+	RNA_def_property_enum_funcs(prop, NULL, NULL, "rna_Refiner_type_itemf");
 	RNA_def_property_ui_text(prop, "Refiner", "Is object a refiner");
-	//RNA_def_property_update(prop, 0, "rna_RefinerSettings_dependency_update");
-
-	prop = RNA_def_property(srna, "shape", PROP_ENUM, PROP_NONE);
-	RNA_def_property_enum_items(prop, refiner_shape_items);
-	RNA_def_property_enum_funcs(prop, NULL, NULL, "rna_Refiner_shape_itemf");
-	RNA_def_property_ui_text(prop, "Shape", "Shape of refinement region");
-	//RNA_def_property_update(prop, 0, "rna_RefinerSettings_shape_update");
+	RNA_def_property_update(prop, 0, "rna_RefinerSettings_type_update");
 
 	/* Floats */
 
@@ -175,19 +171,19 @@ static void rna_def_refiner(BlenderRNA *brna)
 	RNA_def_property_float_sdna(prop, NULL, "radius");
 	RNA_def_property_range(prop, 0.0f, FLT_MAX);
 	RNA_def_property_ui_text(prop, "Radius", "Radius within which to apply splitting");
-	//RNA_def_property_update(prop, 0, "rna_RefinerSettings_update");
+	RNA_def_property_update(prop, 0, "rna_RefinerSettings_update");
 
 	prop = RNA_def_property(srna, "maximum_mass", PROP_FLOAT, PROP_NONE);
 	RNA_def_property_float_sdna(prop, NULL, "max_mass");
 	RNA_def_property_range(prop, 0.0f, FLT_MAX);
 	RNA_def_property_ui_text(prop, "Maximum particle mass", "Upper limit for particle mass in refiner region");
-	//RNA_def_property_update(prop, 0, "rna_RefinerSettings_update");
+	RNA_def_property_update(prop, 0, "rna_RefinerSettings_update");
 
 	prop = RNA_def_property(srna, "minimum_mass", PROP_FLOAT, PROP_NONE);
 	RNA_def_property_float_sdna(prop, NULL, "min_mass");
 	RNA_def_property_range(prop, 0.0f, FLT_MAX);
 	RNA_def_property_ui_text(prop, "Minimum particle mass", "Lower limit for particle mass in refiner region");
-	//RNA_def_property_update(prop, 0, "rna_RefinerSettings_update");
+	RNA_def_property_update(prop, 0, "rna_RefinerSettings_update");
 }
 
 void RNA_def_object_refine(BlenderRNA *brna)

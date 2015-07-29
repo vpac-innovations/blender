@@ -57,6 +57,8 @@ class PHYSICS_PT_refiner(PhysicButtonsPanel, Panel):
 
         split.prop(refiner, "type", text="")
 
+        basic_refiner_settings_ui(self, context, refiner)
+"""
         if refiner.type == 'POINT':
             split = layout.split(percentage=0.2)
             split.label(text="Shape:")
@@ -66,7 +68,7 @@ class PHYSICS_PT_refiner(PhysicButtonsPanel, Panel):
         else:
             return  # nothing to draw
 
-        split = layout.split()
+        split = layout.split()"""
 """
         else:
             basic_refiner_settings_ui(self, context, refiner)

@@ -1170,17 +1170,19 @@ void OBJECT_OT_forcefield_toggle(wmOperatorType *ot)
 
 void ED_object_check_refiner_modifiers(Main *bmain, Scene *scene, Object *object)
 {
-	PartDeflect *pd = object->pd;
+	PartRefine *pr = object->pr;
 	ModifierData *md = modifiers_findByType(object, eModifierType_Surface);
 
 	/* add/remove modifier as needed */
 	if (!md) {
-		if (pd && (pd->shape == PFIELD_SHAPE_SURFACE) && ELEM(pd->forcefield, PFIELD_GUIDE, PFIELD_TEXTURE) == 0)
-			if (ELEM(object->type, OB_MESH, OB_SURF, OB_FONT, OB_CURVE))
+		if (pr && (pr->refine_type == REFINE_SURFACE))
+			if (ELEM(object->type, OB_MESH, OB_SURF)){
+				printf("Adding surface modifier.\n");
 				ED_object_modifier_add(NULL, bmain, scene, object, NULL, eModifierType_Surface);
+			}
 	}
 	else {
-		if (!pd || pd->shape != PFIELD_SHAPE_SURFACE || pd->forcefield != PFIELD_FORCE)
+		if (!pr || pr->refine_type != REFINE_SURFACE)
 			ED_object_modifier_remove(NULL, bmain, object, md);
 	}
 }
@@ -1196,7 +1198,7 @@ static int refiner_toggle_exec(bContext *C, wmOperator *UNUSED(op))
 	else
 		ob->pr->refine_type = 0;
 
-	//ED_object_check_refiner_modifiers(CTX_data_main(C), CTX_data_scene(C), ob);
+	ED_object_check_refiner_modifiers(CTX_data_main(C), CTX_data_scene(C), ob);
 	WM_event_add_notifier(C, NC_OBJECT | ND_DRAW, ob);
 	WM_event_add_notifier(C, NC_OBJECT | ND_MODIFIER, ob);
 

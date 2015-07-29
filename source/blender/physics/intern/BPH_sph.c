@@ -47,6 +47,7 @@
 
 #include "BKE_bvhutils.h"
 #include "BKE_collision.h"
+#include "BKE_effect.h"
 #include "BKE_particle.h"
 #include "BKE_refine.h"
 
@@ -1065,13 +1066,26 @@ static int sphclassical_check_refiners(ListBase *refiners, ParticleData *pa)
 {
 	SPHRefiner *sref;
 	float vec[3], dist;
+	int ret;
 
 	if(refiners) for(sref = refiners->first; sref; sref=sref->next) {
-		printf("Radius: %f\n", sref->radius);
-		sub_v3_v3v3(vec, pa->state.co, sref->co);
-		dist = len_v3(vec);
-		if (dist < sref->radius)
-			return 1;
+		//printf("Radius: %f\n", sref->radius);
+		if(sref->pr->refine_type == REFINE_POINT){
+			sub_v3_v3v3(vec, pa->state.co, sref->co);
+			dist = len_v3(vec);
+			if (dist < sref->radius) /* Need to mod to return a distance later. */
+				return 1;
+		}
+		else{
+			/* Surface refiner, find minimum distance from particle to surface. */
+			ret = closest_point_on_surface(sref->surmd, pa->state.co, sref->co, sref->nor, NULL);
+			if(ret){
+				sub_v3_v3v3(sref->vec_to_particle, vec, sref->co);
+				dist = len_v3(sref->vec_to_particle);
+				if(dist < sref->radius)
+					return 1;
+			}
+		}
 	}
 
 	return 0;
@@ -1080,7 +1094,7 @@ static int sphclassical_check_refiners(ListBase *refiners, ParticleData *pa)
 static void sphclassical_update_refiners(ParticleSimulationData *sim)
 {
 	prEndRefiners(&sim->psys->refiners);
-	sim->psys->refiners = prInitRefiners(sim->scene, sim->ob, sim->psys);
+	sim->psys->refiners = prInitRefiners(sim->scene, sim->ob);
 }
 
 

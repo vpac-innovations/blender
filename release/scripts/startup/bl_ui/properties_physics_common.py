@@ -323,7 +323,8 @@ def basic_force_field_falloff_ui(self, context, field):
 def basic_refiner_settings_ui(self, context, refiner):
     layout = self.layout
 
-    split = layout.split()
+    split = layout.split(percentage=0.2)
+    split.label(text="")
 
     if not refiner or refiner.type == 'NONE':
         return

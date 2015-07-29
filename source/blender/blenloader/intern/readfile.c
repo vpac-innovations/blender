@@ -134,6 +134,7 @@
 #include "BKE_paint.h"
 #include "BKE_particle.h"
 #include "BKE_pointcache.h"
+#include "BKE_refine.h"
 #include "BKE_report.h"
 #include "BKE_sca.h" // for init_actuator
 #include "BKE_scene.h"

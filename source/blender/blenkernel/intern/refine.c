@@ -37,6 +37,7 @@
 #include "BLI_math.h"
 #include "BLI_listbase.h"
 
+#include "BKE_modifier.h"
 #include "BKE_refine.h"
 
 #include "BPH_sph.h"
@@ -75,6 +76,7 @@ static SPHRefiner *new_sph_refiner(Scene *scene, Object *ob, PartRefine *pr)
 	refiner->co[1] = ob->loc[1];
 	refiner->co[2] = ob->loc[2];
 	refiner->radius = pr->radius;
+	refiner->surmd = (SurfaceModifierData *)modifiers_findByType(refiner->ob, eModifierType_Surface);
 
 	return refiner;
 }
@@ -100,8 +102,6 @@ static void add_object_to_refiners(ListBase **refiners, Scene *scene, Object *ob
 void prEndRefiners(ListBase **refiners)
 {
 	if (*refiners) {
-		SPHRefiner *sref = (*refiners)->first;
-
 		BLI_freelistN(*refiners);
 		MEM_freeN(*refiners);
 		*refiners = NULL;
@@ -109,7 +109,7 @@ void prEndRefiners(ListBase **refiners)
 }
 
 /* returns ListBase handle with objects taking part in refining */
-ListBase *prInitRefiners(Scene *scene, Object *ob_src, ParticleSystem *psys_src)
+ListBase *prInitRefiners(Scene *scene, Object *ob_src)
 {
 	Base *base;
 	unsigned int layer= ob_src->lay;
