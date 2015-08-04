@@ -1080,7 +1080,7 @@ static int sphclassical_check_refiners(ListBase *refiners, ParticleData *pa)
 			/* Surface refiner, find minimum distance from particle to surface. */
 			ret = closest_point_on_surface(sref->surmd, pa->state.co, sref->co, sref->nor, NULL);
 			if(ret){
-				sub_v3_v3v3(sref->vec_to_particle, vec, sref->co);
+				sub_v3_v3v3(sref->vec_to_particle, pa->state.co, sref->co);
 				dist = len_v3(sref->vec_to_particle);
 				if(dist < sref->radius)
 					return 1;
