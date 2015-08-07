@@ -47,6 +47,7 @@
 
 #include "BKE_bvhutils.h"
 #include "BKE_collision.h"
+#include "BKE_DerivedMesh.h"
 #include "BKE_effect.h"
 #include "BKE_particle.h"
 #include "BKE_refine.h"
@@ -742,6 +743,53 @@ static int split_through_wall_test(ParticleSimulationData *sim, ParticleData *pa
 	return hit->index >= 0;
 }
 
+static int sphclassical_check_refiners(ListBase *refiners, ParticleData *pa, float offset)
+{
+	SPHRefiner *sref;
+	float vec[3], dist, old_dist;
+	int ret;
+
+	if(refiners) for(sref = refiners->first; sref; sref=sref->next) {
+		if(sref->pr->refine_type == REFINE_POINT){
+			sub_v3_v3v3(vec, pa->state.co, sref->co);
+			dist = len_v3(vec);
+			if (dist < sref->radius + offset) /* Need to mod to return a distance later. */
+				return 1;
+		}
+		else{
+			/* Mesh refiner, find minimum distance from particle to face/edge/vertex. */
+			if (sref->pr->refine_type == REFINE_FACES){
+				/* Ensure inverse obmat up-to-date. Convert to refiner local co-ordinates. */
+				invert_m4_m4(sref->ob->imat, sref->ob->obmat);
+				mul_v3_m4v3(vec, sref->ob->imat, pa->state.co);
+
+				ret = closest_point_on_surface(sref->surmd, vec, sref->co, sref->nor, NULL);
+
+				/* Convert nearest point from refiner local co-oridnates to global co-ordinates. */
+				mul_m4_v3(sref->ob->obmat, sref->co);
+			}
+			else if (sref->pr->refine_type == REFINE_EDGES){
+				ret = closest_point_on_surface(sref->surmd, pa->state.co, sref->co, sref->nor, NULL);
+				mul_m4_v3(sref->ob->obmat, sref->co);
+			}
+			else{
+				/* Vertex refiner, need to implement */
+				ret = 0;
+			}
+
+			if(ret){
+				sub_v3_v3v3(sref->vec_to_particle, pa->state.co, sref->co);
+				dist = len_v3(sref->vec_to_particle);
+				if(dist < sref->radius + offset){
+					return 1;
+				}
+			}
+		}
+	}
+
+	return 0;
+}
+
 static int nearest_split(ParticleSimulationData *sim, SPHRangeData *pfr)
 {
 	/* Since particles array is not being resized, use nearest
@@ -751,6 +799,7 @@ static int nearest_split(ParticleSimulationData *sim, SPHRangeData *pfr)
 	ParticleData *pa = pfr->pa, *npa, test_pa;
 	BVHTreeRayHit hit;
 	SPHNeighbor *pfn;
+	float offset = psys->part->fluid->radius;
 	float min_dist = 2.f * pfr->h;
 	float dist, vec[3];
 	int index=0, p;
@@ -758,13 +807,12 @@ static int nearest_split(ParticleSimulationData *sim, SPHRangeData *pfr)
 	pfn = pfr->neighbors;
 	for(p=0; p < pfr->tot_neighbors; p++, pfn++){
 		npa = pfn->psys->particles + pfn->index;
-		if(pa->sphmassfac+npa->sphmassfac >= 1.05f || npa->alive != PARS_ALIVE ||
-		   ((npa->state.co[2] < 0.030) && (npa->state.co[2] > -0.030) &&
-		    (npa->state.co[1] < 0.030 && npa->state.co[1] > -0.030) &&
-		    (npa->state.co[0] < 0.030 && npa->state.co[0] > -0.030)) ||
-			npa == pa){
+		if(pa->sphmassfac+npa->sphmassfac >= 1.05f || npa->alive != PARS_ALIVE || npa == pa){
 			continue;
 		}
+
+		if(sphclassical_check_refiners(psys->refiners, npa, offset))
+			continue;
 /*
 		copy_particle_key(&test_pa.state, &npa->state, 0);
 		copy_particle_key(&test_pa.prev_state, &pa->state, 0);
@@ -804,10 +852,13 @@ void BPH_sph_unsplit_particle(ParticleSimulationData *sim, float cfra)
 		}
 
 		/* Check if particle is within range of a refiner */
-		if(((pa->state.co[2] < 0.030) && (pa->state.co[2] > -0.030) &&
+		if(sphclassical_check_refiners(psys->refiners, pa, interaction_radius))
+			continue;
+
+		/*if(((pa->state.co[2] < 0.030) && (pa->state.co[2] > -0.030) &&
 	     (pa->state.co[1] < 0.030 && pa->state.co[1] > -0.030) &&
 	     (pa->state.co[0] < 0.030 && pa->state.co[0] > -0.030)))
-			continue;
+			continue;*/
 		/*if(((pa->state.co[2] < 0.10) && (pa->state.co[2] > -0.60) &&
 		    (pa->state.co[1] < 2.000 && pa->state.co[1] > -2.000) &&
 		    (pa->state.co[0] < 2.000 && pa->state.co[0] > -2.000)) ||
@@ -1046,57 +1097,56 @@ static void split_positions(ParticleSimulationData *sim, ParticleData *pa, int n
 	}
 }
 
-void BPH_sph_refiners_init(ListBase **refiners, ParticleSystem *psys)
-{
-	SPHRefiner *refiner= MEM_callocN(sizeof(SPHRefiner), "SPHRefiner");
-
-	if(*refiners == NULL)
-		*refiners = MEM_callocN(sizeof(ListBase), "refiners list");
-
-	/* Add refiner(s) */
-	refiner->co[0] = 0.0f;
-	refiner->co[1] = 0.0f;
-	refiner->co[2] = 0.0f;
-	refiner->radius = 0.02f;
-
-	BLI_addtail(*refiners, refiner);
-}
-
-static int sphclassical_check_refiners(ListBase *refiners, ParticleData *pa)
-{
-	SPHRefiner *sref;
-	float vec[3], dist;
-	int ret;
-
-	if(refiners) for(sref = refiners->first; sref; sref=sref->next) {
-		//printf("Radius: %f\n", sref->radius);
-		if(sref->pr->refine_type == REFINE_POINT){
-			sub_v3_v3v3(vec, pa->state.co, sref->co);
-			dist = len_v3(vec);
-			if (dist < sref->radius) /* Need to mod to return a distance later. */
-				return 1;
-		}
-		else{
-			/* Surface refiner, find minimum distance from particle to surface. */
-			ret = closest_point_on_surface(sref->surmd, pa->state.co, sref->co, sref->nor, NULL);
-			if(ret){
-				sub_v3_v3v3(sref->vec_to_particle, pa->state.co, sref->co);
-				dist = len_v3(sref->vec_to_particle);
-				if(dist < sref->radius)
-					return 1;
-			}
-		}
-	}
-
-	return 0;
-}
-
 static void sphclassical_update_refiners(ParticleSimulationData *sim)
 {
 	prEndRefiners(&sim->psys->refiners);
 	sim->psys->refiners = prInitRefiners(sim->scene, sim->ob);
 }
 
+void BPH_sph_refiners_init(ParticleSimulationData *sim, ParticleSystem *psys)
+{
+	SPHRefiner *sref;
+	BVHTreeFromMesh *treeData;
+	DerivedMesh *dm;
+	Object *current;
+	ListBase *refiners;
+	int num_faces, num_edges;
+
+	sphclassical_update_refiners(sim);
+
+	refiners = psys->refiners;
+
+		if(refiners) for(sref = refiners->first; sref; sref=sref->next) {
+			current = sref->ob;
+			if (current->type == OB_MESH){
+				dm = current->derivedFinal;
+				num_faces = dm->getNumTessFaces(dm);
+				num_edges = dm->getNumEdges(dm);
+
+				MEM_freeN(sref->surmd->bvhtree);
+				treeData = MEM_callocN(sizeof(BVHTreeFromMesh), "bvh tree");
+
+				if(num_faces){
+					if (sref->pr->refine_type == REFINE_FACES)
+						bvhtree_from_mesh_faces(treeData, dm, 0.0f, 4, 6);
+					else if (sref->pr->refine_type == REFINE_EDGES)
+						bvhtree_from_mesh_edges(treeData, dm, 0.0f, 2, 6);
+					else
+						bvhtree_from_mesh_verts(treeData, dm, 0.0f, 2, 6);
+				}
+				else if (num_edges){
+					if (sref->pr->refine_type == REFINE_EDGES)
+						bvhtree_from_mesh_edges(treeData, dm, 0.0f, 2, 6);
+					else
+						bvhtree_from_mesh_verts(treeData, dm, 0.0f, 2, 6);
+				}
+				else
+					bvhtree_from_mesh_verts(treeData, dm, 0.0f, 2, 6);
+
+				sref->surmd->bvhtree = treeData;
+		}
+	}
+}
 
 void BPH_sph_split_particle(ParticleSimulationData *sim, int index, float cfra)
 {
@@ -1108,12 +1158,10 @@ void BPH_sph_split_particle(ParticleSimulationData *sim, int index, float cfra)
 	int newparticles = 8-psys->deadpars.size;
 	int i;
 
-	sphclassical_update_refiners(sim);
-
 	pa = psys->particles+index;
 
 	/* Check if particle is within a refinement zone */
-	if(!sphclassical_check_refiners(psys->refiners, pa))
+	if(!sphclassical_check_refiners(psys->refiners, pa, 0.0f))
 		return;
 
 	if(pa->split == PARS_UNSPLIT){

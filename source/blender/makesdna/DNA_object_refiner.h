@@ -7,8 +7,10 @@ extern "C" {
 
 typedef enum RefineType {
 	REFINE_NULL = 0,
-	REFINE_POINT  = 1,
-	REFINE_SURFACE = 2,
+	REFINE_POINT = 1,
+	REFINE_POINTS = 2,
+	REFINE_EDGES = 3,
+	REFINE_FACES = 4,
 } RefineType;
 
 typedef struct PartRefine {

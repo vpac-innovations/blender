@@ -40,8 +40,10 @@
 
 static EnumPropertyItem refiner_type_items[] = {
     {0, "NONE", 0, "None", ""},
-    {REFINE_POINT, "POINT", 0, "Point", "Refiner for classical SPH adaptive resolution"},
-    {REFINE_SURFACE, "SURFACE", 0, "Surface", "Refiner for classical SPH adaptive resolution"},
+    {REFINE_POINT, "POINT", 0, "From point", "Refiner for classical SPH adaptive resolution"},
+    {REFINE_POINTS, "MESH_POINTS", 0, "From mesh points", "Refiner for classical SPH adaptive resolution"},
+    {REFINE_EDGES, "MESH_EDGES", 0, "From mesh edges", "Refiner for classical SPH adaptive resolution"},
+    {REFINE_FACES, "MESH_FACES", 0, "From mesh faces", "Refiner for classical SPH adaptive resolution"},
     {0, NULL, 0, NULL, NULL}
 };
 #ifdef RNA_RUNTIME
@@ -54,6 +56,7 @@ static EnumPropertyItem refiner_type_items[] = {
 #include "DNA_texture_types.h"
 
 #include "BKE_context.h"
+#include "BKE_DerivedMesh.h"
 #include "BKE_modifier.h"
 #include "BKE_pointcache.h"
 #include "BKE_depsgraph.h"
@@ -77,14 +80,21 @@ static void rna_RefinerSettings_update(Main *UNUSED(bmain), Scene *UNUSED(scene)
 
 static EnumPropertyItem point_type_items[] = {
 	{0, "NONE", 0, "None", ""},
-	{REFINE_POINT, "POINT", 0, "Point", ""},
+	{REFINE_POINT, "POINT", 0, "From Point", ""},
 	{0, NULL, 0, NULL, NULL}
 };
 
+static EnumPropertyItem edge_type_items[] = {
+	{0, "NONE", 0, "None", ""},
+	{REFINE_POINTS, "MESH_POINTS", 0, "From mesh verts", ""},
+    {REFINE_EDGES, "MESH_EDGES", 0, "From mesh edges", ""},
+	{0, NULL, 0, NULL, NULL}
+};
 static EnumPropertyItem surface_type_items[] = {
 	{0, "NONE", 0, "None", ""},
-	{REFINE_POINT, "POINT", 0, "Point", ""},
-	{REFINE_SURFACE, "SURFACE", 0, "Surface", ""},
+	{REFINE_POINTS, "MESH_POINTS", 0, "From mesh verts", ""},
+    {REFINE_EDGES, "MESH_EDGES", 0, "From mesh edges", ""},
+	{REFINE_FACES, "MESH_FACES", 0, "From mesh faces", ""},
 	{0, NULL, 0, NULL, NULL}
 };
 
@@ -92,14 +102,20 @@ static EnumPropertyItem *rna_Refiner_type_itemf(bContext *UNUSED(C), PointerRNA 
                                                  PropertyRNA *UNUSED(prop), bool *UNUSED(r_free))
 {
 	Object *ob = NULL;
+	DerivedMesh *dm;
 
 	ob = (Object *)ptr->id.data;
 
 	if (ELEM(ob->type, OB_EMPTY))
 		return point_type_items;
 
-	if (ELEM(ob->type, OB_MESH, OB_SURF))
+	if (ELEM(ob->type, OB_MESH)){
+		dm = ob->derivedFinal;
+		if (dm->getNumTessFaces(dm))
 			return surface_type_items;
+		else
+			return edge_type_items;
+	}
 
 	return refiner_type_items;
 }
@@ -176,13 +192,13 @@ static void rna_def_refiner(BlenderRNA *brna)
 	prop = RNA_def_property(srna, "maximum_mass", PROP_FLOAT, PROP_NONE);
 	RNA_def_property_float_sdna(prop, NULL, "max_mass");
 	RNA_def_property_range(prop, 0.0f, FLT_MAX);
-	RNA_def_property_ui_text(prop, "Maximum particle mass", "Upper limit for particle mass in refiner region");
+	RNA_def_property_ui_text(prop, "Max mass", "Upper limit for particle mass in refiner region");
 	RNA_def_property_update(prop, 0, "rna_RefinerSettings_update");
 
 	prop = RNA_def_property(srna, "minimum_mass", PROP_FLOAT, PROP_NONE);
 	RNA_def_property_float_sdna(prop, NULL, "min_mass");
 	RNA_def_property_range(prop, 0.0f, FLT_MAX);
-	RNA_def_property_ui_text(prop, "Minimum particle mass", "Lower limit for particle mass in refiner region");
+	RNA_def_property_ui_text(prop, "Min mass", "Lower limit for particle mass in refiner region");
 	RNA_def_property_update(prop, 0, "rna_RefinerSettings_update");
 }
 

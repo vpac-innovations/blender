@@ -1175,14 +1175,12 @@ void ED_object_check_refiner_modifiers(Main *bmain, Scene *scene, Object *object
 
 	/* add/remove modifier as needed */
 	if (!md) {
-		if (pr && (pr->refine_type == REFINE_SURFACE))
-			if (ELEM(object->type, OB_MESH, OB_SURF)){
-				printf("Adding surface modifier.\n");
+		if (pr && ELEM(object->type, OB_MESH)){
 				ED_object_modifier_add(NULL, bmain, scene, object, NULL, eModifierType_Surface);
 			}
 	}
 	else {
-		if (!pr || pr->refine_type != REFINE_SURFACE)
+		if (!pr || pr->refine_type == REFINE_NULL)
 			ED_object_modifier_remove(NULL, bmain, object, md);
 	}
 }
@@ -1191,10 +1189,18 @@ static int refiner_toggle_exec(bContext *C, wmOperator *UNUSED(op))
 {
 	Object *ob = CTX_data_active_object(C);
 
-	if (ob->pr == NULL)
-		ob->pr = object_add_refiner(REFINE_POINT);
-	else if (ob->pr->refine_type == 0)
-		ob->pr->refine_type = REFINE_POINT;
+	if (ob->pr == NULL){
+		if (ELEM(ob->type, OB_EMPTY))
+			ob->pr = object_add_refiner(REFINE_POINT);
+		else
+			ob->pr = object_add_refiner(REFINE_POINTS);
+	}
+	else if (ob->pr->refine_type == 0){
+		if (ELEM(ob->type, OB_EMPTY))
+			ob->pr->refine_type = REFINE_POINT;
+		else
+			ob->pr->refine_type = REFINE_POINTS;
+	}
 	else
 		ob->pr->refine_type = 0;
 

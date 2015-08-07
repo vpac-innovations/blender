@@ -2909,10 +2909,10 @@ static void dynamics_step(ParticleSimulationData *sim, float cfra)
 					  psys_deadpars_init(&psys->deadpars);
 				  }
 
-				  /* Update/initialize refiners */
-				  //BPH_sph_refiners_init(&psys->refiners, psys);
+				  /* Update/initialize refiner BVH trees */
+				  BPH_sph_refiners_init(sim, psys);
 
-				  if (cfra > 9 && cfra < 50000) {
+				  if (cfra > 809 && cfra < 50000) {
 					  LOOP_DYNAMIC_PARTICLES{
 						  if(pa->alive == PARS_ALIVE && pa->split == PARS_UNSPLIT){
 							  BPH_sph_split_particle(sim, p, cfra);
@@ -2920,7 +2920,7 @@ static void dynamics_step(ParticleSimulationData *sim, float cfra)
 						  }
 					  }
 				  }
-				  if (cfra > 9 && cfra < 50000){
+				  if (cfra > 809 && cfra < 50000){
 					  BPH_sph_unsplit_particle(sim, cfra);
 				  }
 			  }
@@ -2937,11 +2937,11 @@ static void dynamics_step(ParticleSimulationData *sim, float cfra)
 	/* finalize particle state and time after dynamics */
 	LOOP_DYNAMIC_PARTICLES {
 		if (pa->alive == PARS_DYING) {
-			pa->alive=PARS_DEAD;
-			pa->state.time=pa->dietime;
+			pa->alive = PARS_DEAD;
+			pa->state.time = pa->dietime;
 		}
 		else
-			pa->state.time=cfra;
+			pa->state.time = cfra;
 	}
 
 	free_collider_cache(&sim->colliders);

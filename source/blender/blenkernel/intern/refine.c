@@ -57,7 +57,7 @@ PartRefine *object_add_refiner(int type)
 		case REFINE_POINT:
 			pr->shape = REFINE_SHAPE_SPHERE;
 			break;
-		case REFINE_SURFACE:
+		case REFINE_FACES:
 			pr->shape = REFINE_SHAPE_FALLOFF;
 			break;
 	}
@@ -85,7 +85,10 @@ static void add_object_to_refiners(ListBase **refiners, Scene *scene, Object *ob
 {
 	SPHRefiner *ref = NULL;
 
-	if ( ob == ob_src )
+	if (ob == ob_src)
+		return;
+
+	if (ob->type == OB_MESH && !ob->derivedFinal)
 		return;
 
 	if (*refiners == NULL)
