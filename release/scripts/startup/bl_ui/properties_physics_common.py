@@ -323,15 +323,28 @@ def basic_force_field_falloff_ui(self, context, field):
 def basic_refiner_settings_ui(self, context, refiner):
     layout = self.layout
 
-    split = layout.split(percentage=0.2)
-    split.label(text="")
+    split = layout.split()
 
     if not refiner or refiner.type == 'NONE':
         return
 
     col = split.column()
+    col.label(text="Settings:")
+
+    col.prop(refiner, "minimum_mass")
+    col.prop(refiner, "maximum_mass")
+
+    col = split.column()
+    col.label(text="")
 
     col.prop(refiner, "radius")
+    col.prop(refiner, "falloff_gradient")
+"""
+    split = layout.split()
 
+    col = split.column()
+
+    col.prop(refiner, "max_mass")
+"""
 if __name__ == "__main__":  # only for live edit.
     bpy.utils.register_module(__name__)

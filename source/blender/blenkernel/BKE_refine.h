@@ -19,7 +19,7 @@ typedef struct SPHRefiner {
 	float nor[3];
 	float vec_to_particle[3];
 	float radius;
-	float pad[3];
+	//float pad[3];
 
 	/* TODO: Add some way of flagging point refiner or surface refiner.
 	 * Surface refiner will need to be associated with a parent object

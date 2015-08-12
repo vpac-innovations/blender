@@ -192,13 +192,19 @@ static void rna_def_refiner(BlenderRNA *brna)
 	prop = RNA_def_property(srna, "maximum_mass", PROP_FLOAT, PROP_NONE);
 	RNA_def_property_float_sdna(prop, NULL, "max_mass");
 	RNA_def_property_range(prop, 0.0f, FLT_MAX);
-	RNA_def_property_ui_text(prop, "Max mass", "Upper limit for particle mass in refiner region");
+	RNA_def_property_ui_text(prop, "Max mass fac", "Upper limit for particle mass in refiner region");
 	RNA_def_property_update(prop, 0, "rna_RefinerSettings_update");
 
 	prop = RNA_def_property(srna, "minimum_mass", PROP_FLOAT, PROP_NONE);
 	RNA_def_property_float_sdna(prop, NULL, "min_mass");
 	RNA_def_property_range(prop, 0.0f, FLT_MAX);
-	RNA_def_property_ui_text(prop, "Min mass", "Lower limit for particle mass in refiner region");
+	RNA_def_property_ui_text(prop, "Min mass fac", "Lower limit for particle mass in refiner region");
+	RNA_def_property_update(prop, 0, "rna_RefinerSettings_update");
+
+	prop = RNA_def_property(srna, "falloff_gradient", PROP_FLOAT, PROP_NONE);
+	RNA_def_property_float_sdna(prop, NULL, "falloff");
+	RNA_def_property_range(prop, 0.0f, FLT_MAX);
+	RNA_def_property_ui_text(prop, "Falloff gradient", "Gradient of falloff function.");
 	RNA_def_property_update(prop, 0, "rna_RefinerSettings_update");
 }
 

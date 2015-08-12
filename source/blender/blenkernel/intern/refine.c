@@ -88,6 +88,8 @@ static void add_object_to_refiners(ListBase **refiners, Scene *scene, Object *ob
 	if (ob == ob_src)
 		return;
 
+	/* Checking that derivedFinal exists to resolve a threading issue.
+	 * TODO: Find out why and find a better solution. */
 	if (ob->type == OB_MESH && !ob->derivedFinal)
 		return;
 

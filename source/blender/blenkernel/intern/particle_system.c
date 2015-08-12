@@ -1052,8 +1052,8 @@ void reset_particle(ParticleSimulationData *sim, ParticleData *pa, float dtime, 
 		pa->alive = PARS_ALIVE;
 
 	/* Initialize adaptive resolution variables. */
-	if (!pa->split){
-		pa->split = PARS_UNSPLIT;
+	if (!pa->adptv){
+		pa->adptv = PARS_ADAPTABLE;
 		pa->sphalpha = 1.f;
 		pa->sphmassfac = 1.f;
 	}
@@ -1304,7 +1304,7 @@ void integrate_particle(ParticleSettings *part, ParticleData *pa, float dtime, f
 
 #undef ZERO_F43
 
-	if(pa->split)
+	if(pa->adptv)
 		pa_mass *= pa->sphmassfac;
 
 	copy_v3_v3(oldpos, pa->state.co);
@@ -2910,17 +2910,17 @@ static void dynamics_step(ParticleSimulationData *sim, float cfra)
 				  }
 
 				  /* Update/initialize refiner BVH trees */
-				  BPH_sph_refiners_init(sim, psys);
+				  BPH_sph_adptv_res_init(sim, psys);
 
 				  if (cfra > 809 && cfra < 50000) {
 					  LOOP_DYNAMIC_PARTICLES{
-						  if(pa->alive == PARS_ALIVE && pa->split == PARS_UNSPLIT){
-							  BPH_sph_split_particle(sim, p, cfra);
-							  //BPH_sph_planar_split(sim, p, cfra);
+						  if(pa->alive == PARS_ALIVE && pa->adptv == PARS_ADAPTABLE){
+							  BPH_sph_split9(sim, p, cfra);
+							  //BPH_sph_split3(sim, p, cfra);
 						  }
 					  }
 				  }
-				  if (cfra > 809 && cfra < 50000){
+				  if ((cfra > 809 && cfra < 50000) && pa->adptv == PARS_ADAPTABLE){
 					  BPH_sph_unsplit_particle(sim, cfra);
 				  }
 			  }

@@ -17,6 +17,7 @@ typedef struct PartRefine {
 	float radius;
 	float max_mass;
 	float min_mass;
+	float falloff;
 	short refine_type;
 	short shape;
 } PartRefine;

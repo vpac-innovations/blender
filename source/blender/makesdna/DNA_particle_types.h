@@ -119,6 +119,8 @@ typedef struct ParticleData {
 
 	float sphdensity;		/* density of sph particle */
 	float sphmassfac;		/* mass factor for adaptive resolution */
+	float sphmaxmass;		/* max particle mass for adaptive resolution */
+	float sphminmass;		/* min particle mass for adaptive resolution */
 	float sphalpha;			/* smoothing length factor for adaptive resolution */
 
 	int hair_index;
@@ -126,7 +128,7 @@ typedef struct ParticleData {
 	short alive;			/* the life state of a particle */
 
 	short split;			/* splitting status of a particle*/
-	short pad;
+	short adptv;			/* Adaptability of particle */
 } ParticleData;
 
 typedef struct SPHFluidSettings {
@@ -575,6 +577,10 @@ typedef enum eParticleChildFlag {
 /* pars->split*/
 #define PARS_SPLIT			1
 #define PARS_UNSPLIT		2
+
+/* pars->adpt */
+#define PARS_ADAPTABLE		1
+#define PARS_UNADAPTABLE	2
 
 /* ParticleDupliWeight->flag */
 #define PART_DUPLIW_CURRENT	1

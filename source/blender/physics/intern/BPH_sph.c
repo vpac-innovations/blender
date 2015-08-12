@@ -747,14 +747,17 @@ static int sphclassical_check_refiners(ListBase *refiners, ParticleData *pa, flo
 {
 	SPHRefiner *sref;
 	float vec[3], dist, old_dist;
-	int ret;
+	int ret = 0;
 
 	if(refiners) for(sref = refiners->first; sref; sref=sref->next) {
 		if(sref->pr->refine_type == REFINE_POINT){
 			sub_v3_v3v3(vec, pa->state.co, sref->co);
 			dist = len_v3(vec);
-			if (dist < sref->radius + offset) /* Need to mod to return a distance later. */
-				return 1;
+			if (dist < sref->radius + offset){
+				pa->sphmaxmass = sref->pr->max_mass < pa->sphmaxmass ? sref->pr->max_mass:pa->sphmaxmass;
+				pa->sphminmass = sref->pr->min_mass < pa->sphminmass ? sref->pr->min_mass:pa->sphminmass;
+				ret = 1;
+			}
 		}
 		else{
 			/* Mesh refiner, find minimum distance from particle to face/edge/vertex. */
@@ -781,13 +784,17 @@ static int sphclassical_check_refiners(ListBase *refiners, ParticleData *pa, flo
 				sub_v3_v3v3(sref->vec_to_particle, pa->state.co, sref->co);
 				dist = len_v3(sref->vec_to_particle);
 				if(dist < sref->radius + offset){
-					return 1;
+					pa->sphmaxmass = sref->pr->max_mass < pa->sphmaxmass ? sref->pr->max_mass:pa->sphmaxmass;
+					pa->sphminmass = sref->pr->min_mass < pa->sphminmass ? sref->pr->min_mass:pa->sphminmass;
+					ret = 1;
 				}
+				else
+					ret = 0;
 			}
 		}
 	}
 
-	return 0;
+	return ret;
 }
 
 static int nearest_split(ParticleSimulationData *sim, SPHRangeData *pfr)
@@ -802,7 +809,7 @@ static int nearest_split(ParticleSimulationData *sim, SPHRangeData *pfr)
 	float offset = psys->part->fluid->radius;
 	float min_dist = 2.f * pfr->h;
 	float dist, vec[3];
-	int index=0, p;
+	int index=-1, p;
 
 	pfn = pfr->neighbors;
 	for(p=0; p < pfr->tot_neighbors; p++, pfn++){
@@ -811,14 +818,12 @@ static int nearest_split(ParticleSimulationData *sim, SPHRangeData *pfr)
 			continue;
 		}
 
-		if(sphclassical_check_refiners(psys->refiners, npa, offset))
+		/* Update particle mass limits from refiners. */
+		sphclassical_check_refiners(psys->refiners, npa, offset);
+
+		if(npa->sphmassfac > npa->sphminmass)
 			continue;
-/*
-		copy_particle_key(&test_pa.state, &npa->state, 0);
-		copy_particle_key(&test_pa.prev_state, &pa->state, 0);
-		if(split_through_wall_test(sim, &test_pa, &hit))
-			continue;
-*/
+
 		sub_v3_v3v3(vec, pa->state.co, npa->state.co);
 		dist = len_v3(vec);
 		if(dist < min_dist){
@@ -851,22 +856,13 @@ void BPH_sph_unsplit_particle(ParticleSimulationData *sim, float cfra)
 			continue;
 		}
 
-		/* Check if particle is within range of a refiner */
-		if(sphclassical_check_refiners(psys->refiners, pa, interaction_radius))
+		/* Update particle mass limits from refiners. */
+		sphclassical_check_refiners(psys->refiners, pa, interaction_radius);
+
+		if(pa->sphmassfac > pa->sphminmass)
 			continue;
 
-		/*if(((pa->state.co[2] < 0.030) && (pa->state.co[2] > -0.030) &&
-	     (pa->state.co[1] < 0.030 && pa->state.co[1] > -0.030) &&
-	     (pa->state.co[0] < 0.030 && pa->state.co[0] > -0.030)))
-			continue;*/
-		/*if(((pa->state.co[2] < 0.10) && (pa->state.co[2] > -0.60) &&
-		    (pa->state.co[1] < 2.000 && pa->state.co[1] > -2.000) &&
-		    (pa->state.co[0] < 2.000 && pa->state.co[0] > -2.000)) ||
-		   ((pa->state.co[2] < -3.90) && (pa->state.co[2] > -4.60) &&
-		    (pa->state.co[1] < 2.000 && pa->state.co[1] > -2.000) &&
-		    (pa->state.co[0] < 2.000 && pa->state.co[0] > -2.000))){
-			continue;
-		}*/
+		pa->adptv = PARS_UNADAPTABLE;
 		pfr.h = h;
 		pfr.pa = pa;
 
@@ -875,7 +871,7 @@ void BPH_sph_unsplit_particle(ParticleSimulationData *sim, float cfra)
 
 		/* Find index of nearest split particle */
 		index_n = nearest_split(sim, &pfr);
-		if(index_n == 0)
+		if(index_n < 0)
 			continue;
 
 		npa = psys->particles+index_n;
@@ -911,15 +907,83 @@ void BPH_sph_unsplit_particle(ParticleSimulationData *sim, float cfra)
 		/* -- Set state variables
 			  Not checking for sphmassfac == 1 to
 			  allow for precision errors.          */
-		if(pa->sphmassfac >= 0.95f){
+		/*if(pa->sphmassfac >= 0.95f){
 			pa->split = PARS_UNSPLIT;
 			pa->sphmassfac = 1.f;
 			pa->sphalpha = 1.f;
-		}
+		}*/
+
 		/* -- Kill other particle. */
 		npa->dietime = cfra + 0.001/((float)(psys->part->subframes + 1));
 		npa->alive = PARS_DEAD;
 		psys_deadpars_add(&psys->deadpars, index_n);
+	}
+}
+
+static void split_positions3(ParticleSimulationData *sim, ParticleData *pa, int num)
+{
+	ParticleData test_pa;
+	BVHTreeRayHit hit;
+	float h = sim->psys->part->fluid->radius * 0.5f;
+	float eps = pa->size;
+	float factor1 = 1.f/pow(3.f, 1.f/3.f);
+	float factor2 = sqrt(5.f)/3.f;
+	float factor3 = 1.f;
+	int i;
+
+	memcpy(&test_pa, pa, sizeof(ParticleData));
+	for(i = 0; i < 3; i++){
+		test_pa.prev_state.co[i] = test_pa.state.co[i];
+	}
+
+	switch(num){
+		case 1:
+			/* Test for split through wall */
+			test_pa.state.co[0] -= factor1*eps;
+			test_pa.state.co[1] -= factor1*factor2*eps;
+
+			if(sim->colliders){
+				i = split_through_wall_test(sim, &test_pa, &hit);
+				if(i)
+					factor3 = (hit.dist-1.f*pa->size);
+			}
+
+			pa->state.co[0] -= factor1*factor3*eps;
+			pa->state.co[1] -= factor1*factor2*factor3*eps;
+			pa->prev_state.co[0] -= factor1*factor3*eps;
+			pa->prev_state.co[1] -= factor1*factor2*factor3*eps;;
+			break;
+		case 2:
+			/* Test for split through wall */
+			test_pa.state.co[0] += factor1*eps;
+			test_pa.state.co[1] -= factor1*factor2*eps;
+
+			if(sim->colliders){
+				i = split_through_wall_test(sim, &test_pa, &hit);
+				if(i)
+					factor3 = (hit.dist-1.f*pa->size);
+			}
+
+			pa->state.co[0] += factor1*factor3*eps;
+			pa->state.co[1] -= factor1*factor2*factor3*eps;
+			pa->prev_state.co[0] += factor1*factor3*eps;
+			pa->prev_state.co[1] -= factor1*factor2*factor3*eps;
+			break;
+		case 3:
+			/* Test for split through wall */
+			test_pa.state.co[1] += 2.f*factor1*factor2*eps;
+
+			if(sim->colliders){
+				i = split_through_wall_test(sim, &test_pa, &hit);
+				if(i)
+					factor3 = (hit.dist-1.f*pa->size);
+			}
+
+			pa->state.co[1] += 2.f*factor1*factor2*factor3*eps;
+			pa->prev_state.co[1] += 2.f*factor1*factor2*factor3*eps;
+			break;
+		default:
+			break;
 	}
 }
 
@@ -1103,52 +1167,59 @@ static void sphclassical_update_refiners(ParticleSimulationData *sim)
 	sim->psys->refiners = prInitRefiners(sim->scene, sim->ob);
 }
 
-void BPH_sph_refiners_init(ParticleSimulationData *sim, ParticleSystem *psys)
+void BPH_sph_adptv_res_init(ParticleSimulationData *sim, ParticleSystem *psys)
 {
 	SPHRefiner *sref;
 	BVHTreeFromMesh *treeData;
 	DerivedMesh *dm;
 	Object *current;
 	ListBase *refiners;
-	int num_faces, num_edges;
+	ParticleData *pa;
+	int num_faces, num_edges, p;
 
 	sphclassical_update_refiners(sim);
 
 	refiners = psys->refiners;
 
-		if(refiners) for(sref = refiners->first; sref; sref=sref->next) {
-			current = sref->ob;
-			if (current->type == OB_MESH){
-				dm = current->derivedFinal;
-				num_faces = dm->getNumTessFaces(dm);
-				num_edges = dm->getNumEdges(dm);
+	if(refiners) for(sref = refiners->first; sref; sref=sref->next) {
+		current = sref->ob;
+		if (current->type == OB_MESH){
+			dm = current->derivedFinal;
+			num_faces = dm->getNumTessFaces(dm);
+			num_edges = dm->getNumEdges(dm);
 
-				MEM_freeN(sref->surmd->bvhtree);
-				treeData = MEM_callocN(sizeof(BVHTreeFromMesh), "bvh tree");
+			MEM_freeN(sref->surmd->bvhtree);
+			treeData = MEM_callocN(sizeof(BVHTreeFromMesh), "bvh tree");
 
-				if(num_faces){
-					if (sref->pr->refine_type == REFINE_FACES)
-						bvhtree_from_mesh_faces(treeData, dm, 0.0f, 4, 6);
-					else if (sref->pr->refine_type == REFINE_EDGES)
-						bvhtree_from_mesh_edges(treeData, dm, 0.0f, 2, 6);
-					else
-						bvhtree_from_mesh_verts(treeData, dm, 0.0f, 2, 6);
-				}
-				else if (num_edges){
-					if (sref->pr->refine_type == REFINE_EDGES)
-						bvhtree_from_mesh_edges(treeData, dm, 0.0f, 2, 6);
-					else
-						bvhtree_from_mesh_verts(treeData, dm, 0.0f, 2, 6);
-				}
+			if(num_faces){
+				if (sref->pr->refine_type == REFINE_FACES)
+					bvhtree_from_mesh_faces(treeData, dm, 0.0f, 4, 6);
+				else if (sref->pr->refine_type == REFINE_EDGES)
+					bvhtree_from_mesh_edges(treeData, dm, 0.0f, 2, 6);
 				else
 					bvhtree_from_mesh_verts(treeData, dm, 0.0f, 2, 6);
+			}
+			else if (num_edges){
+				if (sref->pr->refine_type == REFINE_EDGES)
+					bvhtree_from_mesh_edges(treeData, dm, 0.0f, 2, 6);
+				else
+					bvhtree_from_mesh_verts(treeData, dm, 0.0f, 2, 6);
+			}
+			else
+				bvhtree_from_mesh_verts(treeData, dm, 0.0f, 2, 6);
 
-				sref->surmd->bvhtree = treeData;
+			sref->surmd->bvhtree = treeData;
 		}
+	}
+
+	LOOP_DYNAMIC_PARTICLES{
+		pa->sphmaxmass = 1.1f;
+		pa->sphminmass = 0.9f;
+		pa->adptv = PARS_ADAPTABLE;
 	}
 }
 
-void BPH_sph_split_particle(ParticleSimulationData *sim, int index, float cfra)
+void BPH_sph_split9(ParticleSimulationData *sim, int index, float cfra)
 {
 	ParticleSystem *psys = sim->psys;
 	ParticleSettings *part = psys->part;
@@ -1160,114 +1231,115 @@ void BPH_sph_split_particle(ParticleSimulationData *sim, int index, float cfra)
 
 	pa = psys->particles+index;
 
-	/* Check if particle is within a refinement zone */
-	if(!sphclassical_check_refiners(psys->refiners, pa, 0.0f))
+	/* Update particle mass limits from refiners. */
+	sphclassical_check_refiners(psys->refiners, pa, 0.0f);
+
+	if(pa->sphmassfac < pa->sphmaxmass)
 		return;
 
-	if(pa->split == PARS_UNSPLIT){
-		pa->split = PARS_SPLIT;
-		pa->sphalpha = 0.75f;
-		pa->sphmassfac = 0.2f;
+	pa->adptv = PARS_UNADAPTABLE;
+	pa->sphalpha = 0.75f;
+	pa->sphmassfac = 0.2f;
 
-		if(newparticles > 0){
-			/* Re-allocate particles array. */
-			newtotpart = oldtotpart+newparticles;
-			realloc_particles(sim, newtotpart);
-			pa = psys->particles+index;
+	if(newparticles > 0){
+		/* Re-allocate particles array. */
+		newtotpart = oldtotpart+newparticles;
+		realloc_particles(sim, newtotpart);
+		pa = psys->particles+index;
 
-			/* Make copies of parent particle at end of particles array. */
-			for(i = 0; i < newparticles; i++){
-				new_pa = psys->particles+oldtotpart+i;
-				memcpy(new_pa, pa, sizeof(ParticleData));
-				new_pa->sphmassfac = 0.1f;
-
-				/* Set position for new particle. */
-				split_positions(sim, new_pa, i+1);
-
-				/* Set birth time. Offset to avoid particle reset. */
-				psys -> particles[oldtotpart+i].time = cfra - 0.001/((float)(part->subframes + 1));
-			}
-			/* Update ParticleSettings->totpart. */
-			psys->part->totpart = newtotpart;
-			psys->totadded += newparticles;
-		}
-		else
-			newparticles = 0;
-
-		for(i = 0; i < 8 - newparticles; i++){
-			new_pa = psys->particles+psys->deadpars.data[psys->deadpars.size-1-i];
+		/* Make copies of parent particle at end of particles array. */
+		for(i = 0; i < newparticles; i++){
+			new_pa = psys->particles+oldtotpart+i;
 			memcpy(new_pa, pa, sizeof(ParticleData));
 			new_pa->sphmassfac = 0.1f;
 
 			/* Set position for new particle. */
-			split_positions(sim, new_pa, newparticles+i+1);
+			split_positions(sim, new_pa, i+1);
 
 			/* Set birth time. Offset to avoid particle reset. */
-			new_pa->alive = PARS_ALIVE;
-			new_pa->time = cfra - 0.001/((float)(part->subframes + 1));
-			//psys -> particles[oldtotpart+i].time = cfra - 0.001/((float)(part->subframes + 1));
+			psys -> particles[oldtotpart+i].time = cfra - 0.001/((float)(part->subframes + 1));
 		}
-		psys->deadpars.size -= 8 - newparticles;
+		/* Update ParticleSettings->totpart. */
+		psys->part->totpart = newtotpart;
+		psys->totadded += newparticles;
 	}
+	else
+		newparticles = 0;
+
+	for(i = 0; i < 8 - newparticles; i++){
+		new_pa = psys->particles+psys->deadpars.data[psys->deadpars.size-1-i];
+		memcpy(new_pa, pa, sizeof(ParticleData));
+		new_pa->sphmassfac = 0.1f;
+
+		/* Set position for new particle. */
+		split_positions(sim, new_pa, newparticles+i+1);
+
+		/* Set birth time. Offset to avoid particle reset. */
+		new_pa->alive = PARS_ALIVE;
+		new_pa->time = cfra - 0.001/((float)(part->subframes + 1));
+		//psys -> particles[oldtotpart+i].time = cfra - 0.001/((float)(part->subframes + 1));
+	}
+	psys->deadpars.size -= 8 - newparticles;
 }
 
-void BPH_sph_planar_split(ParticleSimulationData *sim, int index, float cfra)
+void BPH_sph_split3(ParticleSimulationData *sim, int index, float cfra)
 {
 	ParticleSystem *psys = sim->psys;
 	ParticleSettings *part = psys->part;
 	ParticleData *pa, *new_pa;
 	int oldtotpart = psys->totpart;
-	int newtotpart = oldtotpart+2;
+	int newtotpart;
+	int newparticles = 2 - psys->deadpars.size;
 	int i;
 
 	pa = psys->particles+index;
 
-	/* Split particles in predefined box */
-	if((pa->state.co[2] > 0.040 || pa->state.co[2] < -0.020) ||
-	   (pa->state.co[1] > 0.020 || pa->state.co[1] < -0.020) ||
-	   (pa->state.co[0] > 0.020 || pa->state.co[0] < -0.020))
-	   return;
+	/* Update particle mass limits from refiners. */
+	sphclassical_check_refiners(psys->refiners, pa, 0.0f);
 
-	if(pa->split == PARS_UNSPLIT){
+	pa->adptv = PARS_UNADAPTABLE;
+	pa->sphalpha = pow(1.f/3.f, 1.f/3.f);
+	pa->sphmassfac = 1.f/3.f;
+
+	if(newparticles > 0){
 		/* Re-allocate particles array */
+		newtotpart = oldtotpart+newparticles;
 		realloc_particles(sim, newtotpart);
 		pa = psys->particles+index;
 
-		pa->split = PARS_SPLIT;
-		pa->sphalpha = pow(1.f/3.f, 1.f/3.f);
-		pa->sphmassfac = 1.f/3.f;
-
 		/* Make copies of parent particle at end of particles array */
-		new_pa = psys->particles+oldtotpart;
-		memcpy(new_pa, pa, sizeof(ParticleData));
+		for(i = 0; i < newparticles; i++){
+			new_pa = psys->particles+oldtotpart + i;
+			memcpy(new_pa, pa, sizeof(ParticleData));
 
-		new_pa->state.co[0] -= (1.f/6.f)*new_pa->size;
-		new_pa->state.co[1] -= (sqrt(3.f)/18.f)*new_pa->size;
-		new_pa->prev_state.co[0] -= (1.f/6.f)*new_pa->size;
-		new_pa->prev_state.co[1] -= (sqrt(3.f)/18.f)*new_pa->size;
+			split_positions3(sim, new_pa, i+1);
 
-		new_pa = psys->particles+oldtotpart+1;
-		memcpy(new_pa, pa, sizeof(ParticleData));
+			/* Set birth time. Offset to avoid particle reset. */
+			psys->particles[oldtotpart+i].time = cfra - 0.001f/((float)(part->subframes + 1));
+		}
 
-		new_pa->state.co[0] += (1.f/6.f)*new_pa->size;
-		new_pa->state.co[1] -= (sqrt(3.f)/18.f)*new_pa->size;
-		new_pa->prev_state.co[0] += (1.f/6.f)*new_pa->size;
-		new_pa->prev_state.co[1] -= (sqrt(3.f)/18.f)*new_pa->size;
-
-		pa->state.co[1] += (sqrt(3.f)/9.f)*new_pa->size;
-		pa->prev_state.co[1] += (sqrt(3.f)/9.f)*new_pa->size;
-
-		/* Set position for new particle */
-//		split_positions(sim, new_pa, i+1);
-
-		/* Set birth time. Offset to avoid particle reset. Is this robust though?*/
-		psys -> particles[oldtotpart].time = cfra - 0.001/((float)(part->subframes + 1));
-		psys -> particles[oldtotpart+1].time = cfra - 0.001/((float)(part->subframes + 1));
-		/* Update ParticleSettings->totpart.
-				  ParticleSystem->totpart? */
 		psys->part->totpart = newtotpart;
-		psys->totadded += 2;
+		psys->totadded += newparticles;
 	}
+	else
+		newparticles = 0;
+
+	for(i = 0; i < 2 - newparticles; i++){
+		new_pa = psys->particles+psys->deadpars.data[psys->deadpars.size-1-i];
+		memcpy(new_pa, pa, sizeof(ParticleData));
+		new_pa -> sphmassfac = 1.f/3.f;
+
+		split_positions3(sim, new_pa, newparticles+i+1);
+
+		/* Set birth time. Offset to avoid particle reset. */
+		new_pa->alive = PARS_ALIVE;
+		new_pa->time = cfra - 0.001f/((float)(part->subframes + 1));
+	}
+
+	/* Move original particle to new position. */
+	split_positions3(sim, pa, 3);
+
+	psys->deadpars.size -= 2-newparticles;
 }
 
 void BPH_sphDDR_step(ParticleSimulationData *sim, float dtime, float cfra)
