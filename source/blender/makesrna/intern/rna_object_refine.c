@@ -204,7 +204,7 @@ static void rna_def_refiner(BlenderRNA *brna)
 	prop = RNA_def_property(srna, "falloff_gradient", PROP_FLOAT, PROP_NONE);
 	RNA_def_property_float_sdna(prop, NULL, "falloff");
 	RNA_def_property_range(prop, 0.0f, FLT_MAX);
-	RNA_def_property_ui_text(prop, "Falloff gradient", "Gradient of falloff function.");
+	RNA_def_property_ui_text(prop, "Falloff gradient", "Gradient of falloff function");
 	RNA_def_property_update(prop, 0, "rna_RefinerSettings_update");
 }
 

@@ -97,22 +97,22 @@ typedef struct SPHData {
   void (*equation_of_state) (struct SPHData *sphdata, SPHParams *params);
 } SPHData;
 
-/* General SPH functions */
-void BPH_sph_unsplit_particle(struct ParticleSimulationData *sim, float cfra);
-void BPH_sph_split9(struct ParticleSimulationData *sim, int index, float cfra);
-void BPH_sph_split3(struct ParticleSimulationData *sim, int index, float cfra);
-
 /* DDR SPH */
 void BPH_sphDDR_step(struct ParticleSimulationData *sim, float dtime, float cfra);
 
 /* Classical SPH only functions */
 void BPH_sphclassical_step(struct ParticleSimulationData *sim, float dtime, float cfra);
 
-/* Adaptive resolution */
-void BPH_sph_adptv_res_init(struct ParticleSimulationData *sim, struct ParticleSystem *psys);
-
+/* General SPH functions */
 void psys_sph_init(struct ParticleSimulationData *sim, SPHData *sphdata);
 void psys_sph_finalise(SPHData *sphdata);
 void psys_sph_sample(struct BVHTree *tree, SPHData *sphdata, float co[3], SPHParams *params);
+
+/* Adaptive resolution */
+void BPH_sph_adptv_res_init(struct ParticleSimulationData *sim, struct ParticleSystem *psys);
+void BPH_sph_unsplit_particle(struct ParticleSimulationData *sim, float cfra);
+void BPH_sph_split9(struct ParticleSimulationData *sim, int index, float cfra);
+void BPH_sph_split3(struct ParticleSimulationData *sim, int index, float cfra);
+void BPH_sph_split2(struct ParticleSimulationData *sim, int index, float cfra);
 
 #endif
