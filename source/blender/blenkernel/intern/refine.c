@@ -88,10 +88,11 @@ static void add_object_to_refiners(ListBase **refiners, Scene *scene, Object *ob
 	if (ob == ob_src)
 		return;
 
-	/* Checking that derivedFinal exists to resolve a threading issue.
-	 * TODO: Find out why and find a better solution. */
-	if (ob->type == OB_MESH && !ob->derivedFinal)
-		return;
+	/* derivedFinal may have been released in a separate function on
+	 * another thread, hold here until it exists.
+	 * TODO: Find a better solution. */
+	while(ob->type == OB_MESH && !ob->derivedFinal){
+	}
 
 	if (*refiners == NULL)
 		*refiners = MEM_callocN(sizeof(ListBase), "refiners list");

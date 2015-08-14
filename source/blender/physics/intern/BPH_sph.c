@@ -879,11 +879,11 @@ void BPH_sph_unsplit_particle(ParticleSimulationData *sim, float cfra)
 	psys_sph_init(sim, &sphdata);
 
 	LOOP_DYNAMIC_PARTICLES{
-		if((pa->alive != PARS_ALIVE || pa->sphmassfac > 0.91f)){
+		if((pa->alive != PARS_ALIVE || pa->sphmassfac > 0.91f || pa->adptv == PARS_UNADAPTABLE)){
 			continue;
 		}
 
-		/* Update particle mass limits from refiners. */
+		/* Update particle mass limits from refiners */
 		sphclassical_check_refiners(psys->refiners, pa, interaction_radius);
 
 		if(pa->sphmassfac > pa->sphminmass)
@@ -1255,6 +1255,11 @@ void BPH_sph_adptv_res_init(ParticleSimulationData *sim, ParticleSystem *psys)
 	if(refiners) for(sref = refiners->first; sref; sref=sref->next) {
 		current = sref->ob;
 		if (current->type == OB_MESH){
+			/* derivedFinal may have been released in a separate function on
+			 * another thread, hold here until it exists.
+			 * TODO: Find a better solution. */
+			while(!current->derivedFinal){
+			}
 			dm = current->derivedFinal;
 			num_faces = dm->getNumTessFaces(dm);
 			num_edges = dm->getNumEdges(dm);
