@@ -743,7 +743,7 @@ static int split_through_wall_test(ParticleSimulationData *sim, ParticleData *pa
 	return hit->index >= 0;
 }
 
-static void sphclassical_check_refiners(ListBase *refiners, ParticleData *pa, float offset)
+static void sphclassical_check_refiners(ListBase *refiners, RefinerData* rfd, ParticleData *pa, float offset)
 {
 	SPHRefiner *sref;
 	float vec[3], dist, upper_bound, lower_bound, grad, eps1, eps2;
@@ -832,6 +832,7 @@ static int nearest_split(ParticleSimulationData *sim, SPHRangeData *pfr)
 	 * particle */
 	ParticleSystem *psys = sim->psys;
 	ParticleData *pa = pfr->pa, *npa;
+	RefinerData rfd;
 	SPHNeighbor *pfn;
 	float offset = psys->part->fluid->radius;
 	float min_dist = 2.f * pfr->h;
@@ -846,7 +847,7 @@ static int nearest_split(ParticleSimulationData *sim, SPHRangeData *pfr)
 		}
 
 		/* Update particle mass limits from refiners. */
-		sphclassical_check_refiners(psys->refiners, npa, offset);
+		sphclassical_check_refiners(psys->refiners, &rfd, npa, offset);
 
 		if(npa->sphmassfac > npa->sphminmass)
 			continue;
@@ -867,6 +868,7 @@ void BPH_sph_unsplit_particle(ParticleSimulationData *sim, float cfra)
 	SPHData sphdata;
 	ParticleSystem *psys = sim->psys;
 	ParticleData *npa;
+	RefinerData rfd;
 	SPHRangeData pfr;
 	float qfac = qfac = 21.0f / (256.f * (float)M_PI);
 	float interaction_radius = psys->part->fluid->radius;
@@ -884,7 +886,7 @@ void BPH_sph_unsplit_particle(ParticleSimulationData *sim, float cfra)
 		}
 
 		/* Update particle mass limits from refiners */
-		sphclassical_check_refiners(psys->refiners, pa, interaction_radius);
+		sphclassical_check_refiners(psys->refiners, &rfd, pa, interaction_radius);
 
 		if(pa->sphmassfac > pa->sphminmass)
 			continue;
@@ -1300,6 +1302,7 @@ void BPH_sph_split2(ParticleSimulationData *sim, int index, float cfra)
 	ParticleSystem *psys = sim->psys;
 	ParticleSettings *part = psys->part;
 	ParticleData *pa, *new_pa;
+	RefinerData rfd;
 	int oldtotpart = psys->totpart;
 	int newtotpart;
 	int newparticles = 1 - psys->deadpars.size;
@@ -1308,7 +1311,7 @@ void BPH_sph_split2(ParticleSimulationData *sim, int index, float cfra)
 	pa = psys->particles + index;
 
 	/* Update particle mass limits from refiners. */
-	sphclassical_check_refiners(psys->refiners, pa, 0.0f);
+	sphclassical_check_refiners(psys->refiners, &rfd, pa, 0.0f);
 
 	if(pa->sphmassfac < pa->sphmaxmass)
 		return;
@@ -1368,6 +1371,7 @@ void BPH_sph_split3(ParticleSimulationData *sim, int index, float cfra)
 	ParticleSystem *psys = sim->psys;
 	ParticleSettings *part = psys->part;
 	ParticleData *pa, *new_pa;
+	RefinerData rfd;
 	int oldtotpart = psys->totpart;
 	int newtotpart;
 	int newparticles = 2 - psys->deadpars.size;
@@ -1376,7 +1380,7 @@ void BPH_sph_split3(ParticleSimulationData *sim, int index, float cfra)
 	pa = psys->particles + index;
 
 	/* Update particle mass limits from refiners. */
-	sphclassical_check_refiners(psys->refiners, pa, 0.0f);
+	sphclassical_check_refiners(psys->refiners, &rfd, pa, 0.0f);
 
 	if(pa->sphmassfac < pa->sphmaxmass)
 		return;
@@ -1436,6 +1440,7 @@ void BPH_sph_split9(ParticleSimulationData *sim, int index, float cfra)
 	ParticleSystem *psys = sim->psys;
 	ParticleSettings *part = psys->part;
 	ParticleData *pa, *new_pa;
+	RefinerData rfd;
 	int oldtotpart = psys->totpart;
 	int newtotpart;
 	int newparticles = 8 - psys->deadpars.size;
@@ -1444,7 +1449,7 @@ void BPH_sph_split9(ParticleSimulationData *sim, int index, float cfra)
 	pa = psys->particles + index;
 
 	/* Update particle mass limits from refiners. */
-	sphclassical_check_refiners(psys->refiners, pa, 0.0f);
+	sphclassical_check_refiners(psys->refiners, &rfd, pa, 0.0f);
 
 	if(pa->sphmassfac < pa->sphmaxmass)
 		return;
