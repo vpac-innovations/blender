@@ -753,24 +753,7 @@ static void sphclassical_check_refiners(ListBase *refiners, RefinerData* rfd, Pa
 		switch(sref->pr->refine_type) {
 			case REFINE_POINT:
 			{
-				sub_v3_v3v3(vec, pa->state.co, sref->co);
-				dist = len_v3(vec);
-				if (dist < sref->radius + offset){
-					grad = sref->pr->falloff;
-					if(grad > 0){
-						eps1 = 0.1f * sref->pr->min_mass;
-						eps2 = 0.1f * sref->pr->max_mass;
-						upper_bound = MIN2(MAX2(sref->pr->min_mass+eps1, 2.0f * grad * dist), sref->pr->max_mass + eps2);
-						lower_bound = MIN2(MAX2(sref->pr->min_mass-eps1, 0.5f * grad * dist), sref->pr->max_mass - eps2);
-
-						pa->sphmaxmass = upper_bound < pa->sphmaxmass ? upper_bound:pa->sphmaxmass;
-						pa->sphminmass = lower_bound < pa->sphminmass ? lower_bound:pa->sphminmass;
-					}
-					else{
-						pa->sphmaxmass = sref->pr->max_mass < pa->sphmaxmass ? sref->pr->max_mass:pa->sphmaxmass;
-						pa->sphminmass = sref->pr->min_mass < pa->sphminmass ? sref->pr->min_mass:pa->sphminmass;
-					}
-				}
+				ret = 1;
 				break;
 			}
 			case REFINE_FACES:
@@ -813,12 +796,20 @@ static void sphclassical_check_refiners(ListBase *refiners, RefinerData* rfd, Pa
 					upper_bound = MIN2(MAX2(sref->pr->min_mass+eps1, 2.0f * grad * dist), sref->pr->max_mass + eps2);
 					lower_bound = MIN2(MAX2(sref->pr->min_mass-eps1, 0.5f * grad * dist), sref->pr->max_mass - eps2);
 
-					pa->sphmaxmass = upper_bound < pa->sphmaxmass ? upper_bound:pa->sphmaxmass;
-					pa->sphminmass = lower_bound < pa->sphminmass ? lower_bound:pa->sphminmass;
+					if (upper_bound < pa->sphmaxmass || lower_bound < pa->sphminmass){
+						pa->sphmaxmass = upper_bound < pa->sphmaxmass ? upper_bound:pa->sphmaxmass;
+						pa->sphminmass = lower_bound < pa->sphminmass ? lower_bound:pa->sphminmass;
+						rfd->dist = dist;
+						copy_v3_v3(rfd->v2p, sref->vec_to_particle);
+					}
 				}
 				else{
-					pa->sphmaxmass = sref->pr->max_mass < pa->sphmaxmass ? sref->pr->max_mass:pa->sphmaxmass;
-					pa->sphminmass = sref->pr->min_mass < pa->sphminmass ? sref->pr->min_mass:pa->sphminmass;
+					if (sref->pr->max_mass < pa->sphmaxmass || sref->pr->min_mass < pa->sphminmass) {
+						pa->sphmaxmass = sref->pr->max_mass < pa->sphmaxmass ? sref->pr->max_mass:pa->sphmaxmass;
+						pa->sphminmass = sref->pr->min_mass < pa->sphminmass ? sref->pr->min_mass:pa->sphminmass;
+						rfd->dist = dist;
+						copy_v3_v3(rfd->v2p, sref->vec_to_particle);
+					}
 				}
 			}
 		}
