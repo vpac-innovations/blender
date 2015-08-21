@@ -50,17 +50,12 @@ PartRefine *object_add_refiner(int type)
 
 	pr->refine_type = type;
 	pr->radius = 0.05f;
-	pr->max_mass = FLT_MAX;
-	pr->min_mass = 0.0f;
-
-	switch (type) {
-		case REFINE_POINT:
-			pr->shape = REFINE_SHAPE_SPHERE;
-			break;
-		case REFINE_FACES:
-			pr->shape = REFINE_SHAPE_FALLOFF;
-			break;
-	}
+	pr->falloff = 1.f;
+	pr->split_ratio = SPLIT2;
+	pr->nsplits = REFINE_ONCE;
+	pr->falloff_flag = NO_FALLOFF;
+	//pr->max_mass = 11.f / (10.f * pow(pr->split_ratio, pr->nsplits));
+	//pr->min_mass = 1.f / (pow(pr->split_ratio, pr->nsplits));
 
 	return pr;
 }
@@ -72,10 +67,9 @@ static SPHRefiner *new_sph_refiner(Scene *scene, Object *ob, PartRefine *pr)
 	refiner->scene = scene;
 	refiner->ob = ob;
 	refiner->pr = pr;
-	refiner->co[0] = ob->loc[0];
-	refiner->co[1] = ob->loc[1];
-	refiner->co[2] = ob->loc[2];
+	refiner->pr->min_mass = 1.f / (pow(refiner->pr->split_ratio, refiner->pr->nsplits));
 	refiner->radius = pr->radius;
+	copy_v3_v3(refiner->co, ob->loc);
 	refiner->surmd = (SurfaceModifierData *)modifiers_findByType(refiner->ob, eModifierType_Surface);
 
 	return refiner;

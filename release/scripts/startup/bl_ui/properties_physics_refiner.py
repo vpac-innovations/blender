@@ -52,128 +52,22 @@ class PHYSICS_PT_refiner(PhysicButtonsPanel, Panel):
         ob = context.object
         refiner = ob.refiner
 
-        split = layout.split(percentage=0.2)
+        split = layout.split(percentage=0.3)
         split.label(text="Type:")
-
         split.prop(refiner, "type", text="")
 
+        split = layout.split(percentage=0.3)
+        split.label(text="Split ratio:")
+        split.prop(refiner, "ratio", text="")
+
+        split = layout.split(percentage=0.3)
+        split.label(text="No. of splits:")
+        split.prop(refiner, "nsplit", text="")
+
+        split = layout.split()
+        split.prop(refiner, "use_falloff")
+
         basic_refiner_settings_ui(self, context, refiner)
-"""
-        if refiner.type == 'POINT':
-            split = layout.split(percentage=0.2)
-            split.label(text="Shape:")
-            split.prop(refiner, "shape", text="")
-        elif refiner.type == 'SURFACE':
-            return  # not implemented yet
-        else:
-            return  # nothing to draw
 
-        split = layout.split()"""
-"""
-        else:
-            basic_refiner_settings_ui(self, context, refiner)
-        elif field.type == 'REFINER':
-            col = split.column()
-            col.prop(field, "guide_minimum")
-            col.prop(field, "guide_free")
-            col.prop(field, "falloff_power")
-            col.prop(field, "use_guide_path_add")
-            col.prop(field, "use_guide_path_weight")
-
-            col = split.column()
-            col.label(text="Clumping:")
-            col.prop(field, "guide_clump_amount")
-            col.prop(field, "guide_clump_shape")
-
-            row = layout.row()
-            row.prop(field, "use_max_distance")
-            sub = row.row()
-            sub.active = field.use_max_distance
-            sub.prop(field, "distance_max")
-
-            layout.separator()
-
-            layout.prop(field, "guide_kink_type")
-            if field.guide_kink_type != 'NONE':
-                layout.prop(field, "guide_kink_axis")
-
-                split = layout.split()
-
-                col = split.column()
-                col.prop(field, "guide_kink_frequency")
-                col.prop(field, "guide_kink_shape")
-
-                col = split.column()
-                col.prop(field, "guide_kink_amplitude")
-
-        elif field.type == 'TEXTURE':
-            col = split.column()
-            col.prop(field, "strength")
-            col.prop(field, "texture_mode", text="")
-            col.prop(field, "texture_nabla")
-
-            col = split.column()
-            col.prop(field, "use_object_coords")
-            col.prop(field, "use_2d_force")
-        elif field.type == 'SMOKE_FLOW':
-            col = split.column()
-            col.prop(field, "strength")
-            col.prop(field, "flow")
-            col = split.column()
-            col.label(text="Domain Object:")
-            col.prop(field, "source_object", "")
-            col.prop(field, "use_smoke_density")
-        else:
-            basic_force_field_settings_ui(self, context, field)
-
-        if field.type not in {'NONE', 'GUIDE'}:
-
-            layout.label(text="Falloff:")
-            layout.prop(field, "falloff_type", expand=True)
-
-            basic_force_field_falloff_ui(self, context, field)
-
-            if field.falloff_type == 'CONE':
-                layout.separator()
-
-                split = layout.split(percentage=0.35)
-
-                col = split.column()
-                col.label(text="Angular:")
-                col.prop(field, "use_radial_min", text="Use Minimum")
-                col.prop(field, "use_radial_max", text="Use Maximum")
-
-                col = split.column()
-                col.prop(field, "radial_falloff", text="Power")
-
-                sub = col.column()
-                sub.active = field.use_radial_min
-                sub.prop(field, "radial_min", text="Angle")
-
-                sub = col.column()
-                sub.active = field.use_radial_max
-                sub.prop(field, "radial_max", text="Angle")
-
-            elif field.falloff_type == 'TUBE':
-                layout.separator()
-
-                split = layout.split(percentage=0.35)
-
-                col = split.column()
-                col.label(text="Radial:")
-                col.prop(field, "use_radial_min", text="Use Minimum")
-                col.prop(field, "use_radial_max", text="Use Maximum")
-
-                col = split.column()
-                col.prop(field, "radial_falloff", text="Power")
-
-                sub = col.column()
-                sub.active = field.use_radial_min
-                sub.prop(field, "radial_min", text="Distance")
-
-                sub = col.column()
-                sub.active = field.use_radial_max
-                sub.prop(field, "radial_max", text="Distance")
-"""
 if __name__ == "__main__":  # only for live edit.
     bpy.utils.register_module(__name__)

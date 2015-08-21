@@ -110,9 +110,9 @@ void psys_sph_sample(struct BVHTree *tree, SPHData *sphdata, float co[3], SPHPar
 
 /* Adaptive resolution */
 void BPH_sph_adptv_res_init(struct ParticleSimulationData *sim, struct ParticleSystem *psys);
+void BPH_sph_split_particle(struct ParticleSimulationData *sim, float cfra);
 void BPH_sph_unsplit_particle(struct ParticleSimulationData *sim, float cfra);
 void BPH_sph_split9(struct ParticleSimulationData *sim, int index, float cfra);
 void BPH_sph_split3(struct ParticleSimulationData *sim, int index, float cfra);
-void BPH_sph_split2(struct ParticleSimulationData *sim, int index, float cfra);
 
 #endif

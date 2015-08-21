@@ -18,21 +18,13 @@ typedef struct SPHRefiner {
 	float co[3];
 	float nor[3];
 	float vec_to_particle[3];
-	float radius;
-
-	/* TODO: Add some way of flagging point refiner or surface refiner.
-	 * Surface refiner will need to be associated with a parent object
-	 * and will need to know which mesh surfaces apply refinement.
-	 *
-	 * Can point refiners be associated with a parent object?
-	 *
-	 * Expose all/some of this through Python API in order to develop
-	 * an automatic feature detection script? */
+	float radius;\
 } SPHRefiner;
 
 typedef struct RefinerData {
 	float v2p[3];
 	float dist;
+	int ratio;
 } RefinerData;
 
 #endif

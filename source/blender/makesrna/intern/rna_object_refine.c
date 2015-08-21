@@ -46,6 +46,22 @@ static EnumPropertyItem refiner_type_items[] = {
     {REFINE_FACES, "MESH_FACES", 0, "From mesh faces", "Refiner for classical SPH adaptive resolution"},
     {0, NULL, 0, NULL, NULL}
 };
+
+static EnumPropertyItem refiner_ratio_items[] = {
+    {SPLIT2, "SPLIT2", 0, "2:1", "Split each parent particle into 2 daughter particles"},
+    {SPLIT3, "SPLIT3", 0, "3:1", "Split each parent particle into 3 daughter particles"},
+    {SPLIT9, "SPLIT9", 0, "9:1", "Split each parent particle into 9 daughter particles"},
+    {0, NULL, 0, NULL, NULL}
+};
+
+static EnumPropertyItem refiner_split_items[] = {
+    {REFINE_ONCE, "ONCE", 0, "1", "Allow particles to be split once."},
+    {REFINE_TWICE, "TWICE", 0, "2", "Allow particles to be split twice"},
+    {REFINE_THREE_TIMES, "THREE_TIMES", 0, "3", "Allow particles to be split three times"},
+    {REFINE_FOUR_TIMES, "FOUR_TIMES", 0, "4", "Allow particles to be split four times"},
+    {REFINE_FIVE_TIMES, "FIVE_TIMES", 0, "5", "Allow particles to be split five times"},
+    {0, NULL, 0, NULL, NULL}
+};
 #ifdef RNA_RUNTIME
 
 #include "BLI_math_base.h"
@@ -97,6 +113,12 @@ static EnumPropertyItem surface_type_items[] = {
 	{REFINE_FACES, "MESH_FACES", 0, "From mesh faces", ""},
 	{0, NULL, 0, NULL, NULL}
 };
+static EnumPropertyItem volume_split_items[] = {
+    {REFINE_ONCE, "ONCE", 0, "1", "Allow particles to be split once."},
+    {REFINE_TWICE, "TWICE", 0, "2", "Allow particles to be split twice"},
+    {REFINE_THREE_TIMES, "THREE_TIMES", 0, "3", "Allow particles to be split three times"},
+    {0, NULL, 0, NULL, NULL}
+};
 
 static EnumPropertyItem *rna_Refiner_type_itemf(bContext *UNUSED(C), PointerRNA *ptr,
                                                  PropertyRNA *UNUSED(prop), bool *UNUSED(r_free))
@@ -121,6 +143,39 @@ static EnumPropertyItem *rna_Refiner_type_itemf(bContext *UNUSED(C), PointerRNA 
 }
 
 static void rna_RefinerSettings_type_update(Main *bmain, Scene *scene, PointerRNA *ptr)
+{
+	if (!particle_id_check(ptr)) {
+		Object *ob = (Object *)ptr->id.data;
+		ED_object_check_refiner_modifiers(bmain, scene, ob);
+		WM_main_add_notifier(NC_OBJECT | ND_DRAW, ob);
+		WM_main_add_notifier(NC_OBJECT | ND_MODIFIER, ob);
+	}
+}
+
+static void rna_RefinerSettings_ratio_update(Main *bmain, Scene *scene, PointerRNA *ptr)
+{
+	if (!particle_id_check(ptr)) {
+		Object *ob = (Object *)ptr->id.data;
+		ED_object_check_refiner_modifiers(bmain, scene, ob);
+		WM_main_add_notifier(NC_OBJECT | ND_DRAW, ob);
+		WM_main_add_notifier(NC_OBJECT | ND_MODIFIER, ob);
+	}
+}
+
+static EnumPropertyItem *rna_Refiner_split_itemf(bContext *UNUSED(C), PointerRNA *ptr,
+                                                 PropertyRNA *UNUSED(prop), bool *UNUSED(r_free))
+{
+	Object *ob = NULL;
+
+	ob = (Object *)ptr->id.data;
+
+	if (ob->pr->split_ratio != SPLIT9)
+		return refiner_split_items;
+	else
+		return volume_split_items;
+}
+
+static void rna_RefinerSettings_split_update(Main *bmain, Scene *scene, PointerRNA *ptr)
 {
 	if (!particle_id_check(ptr)) {
 		Object *ob = (Object *)ptr->id.data;
@@ -178,34 +233,54 @@ static void rna_def_refiner(BlenderRNA *brna)
 	RNA_def_property_enum_sdna(prop, NULL, "refine_type");
 	RNA_def_property_enum_items(prop, refiner_type_items);
 	RNA_def_property_enum_funcs(prop, NULL, NULL, "rna_Refiner_type_itemf");
-	RNA_def_property_ui_text(prop, "Refiner", "Is object a refiner");
+	RNA_def_property_ui_text(prop, "Refiner", "Measure distance from particle to refiner using objects' verts, edges or faces");
 	RNA_def_property_update(prop, 0, "rna_RefinerSettings_type_update");
+
+	prop = RNA_def_property(srna, "ratio", PROP_ENUM, PROP_NONE);
+	RNA_def_property_enum_sdna(prop, NULL, "split_ratio");
+	RNA_def_property_enum_items(prop, refiner_ratio_items);
+	RNA_def_property_ui_text(prop, "Splitting ratio", "Ratio of daughter to parent particles");
+	RNA_def_property_update(prop, 0, "rna_RefinerSettings_ratio_update");
+
+	prop = RNA_def_property(srna, "nsplit", PROP_ENUM, PROP_NONE);
+	RNA_def_property_enum_sdna(prop, NULL, "nsplits");
+	RNA_def_property_enum_items(prop, refiner_split_items);
+	RNA_def_property_enum_funcs(prop, NULL, NULL, "rna_Refiner_split_itemf");
+	RNA_def_property_ui_text(prop, "Number of splits allowed", "Max number of times a particle may be split");
+	RNA_def_property_update(prop, 0, "rna_RefinerSettings_split_update");
 
 	/* Floats */
 
 	prop = RNA_def_property(srna, "radius", PROP_FLOAT, PROP_NONE);
 	RNA_def_property_float_sdna(prop, NULL, "radius");
 	RNA_def_property_range(prop, 0.0f, FLT_MAX);
-	RNA_def_property_ui_text(prop, "Radius", "Radius within which to apply splitting");
+	RNA_def_property_ui_text(prop, "Radius", "Radius within which adaptive resolution is active");
 	RNA_def_property_update(prop, 0, "rna_RefinerSettings_update");
 
 	prop = RNA_def_property(srna, "maximum_mass", PROP_FLOAT, PROP_NONE);
 	RNA_def_property_float_sdna(prop, NULL, "max_mass");
-	RNA_def_property_range(prop, 0.0f, FLT_MAX);
+	RNA_def_property_range(prop, 0.0f, 1.f);
 	RNA_def_property_ui_text(prop, "Max mass fac", "Upper limit for particle mass in refiner region");
 	RNA_def_property_update(prop, 0, "rna_RefinerSettings_update");
 
 	prop = RNA_def_property(srna, "minimum_mass", PROP_FLOAT, PROP_NONE);
 	RNA_def_property_float_sdna(prop, NULL, "min_mass");
-	RNA_def_property_range(prop, 0.0f, FLT_MAX);
+	RNA_def_property_range(prop, 0.0f, 1.f);
 	RNA_def_property_ui_text(prop, "Min mass fac", "Lower limit for particle mass in refiner region");
 	RNA_def_property_update(prop, 0, "rna_RefinerSettings_update");
 
 	prop = RNA_def_property(srna, "falloff_gradient", PROP_FLOAT, PROP_NONE);
 	RNA_def_property_float_sdna(prop, NULL, "falloff");
 	RNA_def_property_range(prop, 0.0f, FLT_MAX);
-	RNA_def_property_ui_text(prop, "Falloff gradient", "Gradient of falloff function");
+	RNA_def_property_ui_text(prop, "Falloff gradient", "Gradient of linear falloff function");
 	RNA_def_property_update(prop, 0, "rna_RefinerSettings_update");
+
+	/* Misc?*/
+	prop = RNA_def_property(srna, "use_falloff", PROP_BOOLEAN, PROP_NONE);
+	RNA_def_property_boolean_sdna(prop, NULL, "falloff_flag", NO_FALLOFF);
+	RNA_def_property_ui_text(prop, "Use falloff function",
+	                         "Use falloff function to determine when splitting/merging happens");
+	//RNA_def_property_update(prop, 0, "rna_Particle_reset");
 }
 
 void RNA_def_object_refine(BlenderRNA *brna)

@@ -328,6 +328,13 @@ def basic_refiner_settings_ui(self, context, refiner):
     if not refiner or refiner.type == 'NONE':
         return
 
+    if refiner.use_falloff:
+       split = layout.split()
+       split.prop(refiner, "falloff_gradient")
+    else:
+       split = layout.split()
+       split.prop(refiner, "radius")
+"""
     col = split.column()
     col.label(text="Settings:")
 
@@ -339,7 +346,7 @@ def basic_refiner_settings_ui(self, context, refiner):
 
     col.prop(refiner, "radius")
     col.prop(refiner, "falloff_gradient")
-"""
+
     split = layout.split()
 
     col = split.column()

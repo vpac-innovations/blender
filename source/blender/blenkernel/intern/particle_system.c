@@ -2912,16 +2912,17 @@ static void dynamics_step(ParticleSimulationData *sim, float cfra)
 				  /* Update/initialize refiner BVH trees */
 				  BPH_sph_adptv_res_init(sim, psys);
 
-				  if (cfra > 9 && cfra < 50000) {
+/*				  if (cfra > 9 && cfra < 50000) {
 					  LOOP_DYNAMIC_PARTICLES{
 						  if(pa->alive == PARS_ALIVE && pa->adptv == PARS_ADAPTABLE){
 							  //BPH_sph_split9(sim, p, cfra);
-							  //BPH_sph_split3(sim, p, cfra);
-							  BPH_sph_split2(sim, p, cfra);
+							  BPH_sph_split3(sim, p, cfra);
+							  //BPH_sph_split2(sim, p, cfra);
 						  }
 					  }
-				  }
-				  if ((cfra > 9 && cfra < 50000) && pa->adptv == PARS_ADAPTABLE){
+				  }*/
+				  if (cfra > 809 && cfra < 50000){
+					  BPH_sph_split_particle(sim, cfra);
 					  BPH_sph_unsplit_particle(sim, cfra);
 				  }
 			  }
