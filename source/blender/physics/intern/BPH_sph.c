@@ -1057,14 +1057,25 @@ static void split_positions3(ParticleSimulationData *sim, ParticleData *pa, Refi
 	}
 }
 
-static void split_positions9(ParticleSimulationData *sim, ParticleData *pa, int num)
+static void split_positions9(ParticleSimulationData *sim, ParticleData *pa, RefinerData *rfd, int num)
 {
 	ParticleData test_pa;
 	BVHTreeRayHit hit;
 	float h = sim->psys->part->fluid->radius * 0.5f * pa->sphalpha;
 	float eps = 0.7f * h;
 	float factor = eps * sqrt(3.f) / 3.f;
+	float factor1 = (1.f - rfd->v2p[2]) / (pow2f(rfd->v2p[0]) + pow2f(rfd->v2p[1]));
+	float base_x[3];
+	float base_y[3];
 	int i;
+
+	base_x[0] = isfinite(factor1) ? 1.f - pow2f(rfd->v2p[0]) * factor1:1.f;
+	base_x[1] = isfinite(factor1) ? -rfd->v2p[0] * rfd->v2p[1] * factor1:0.f;
+	base_x[2] = -rfd->v2p[0];
+
+	base_y[0] = isfinite(factor1) ? -rfd->v2p[1] * rfd->v2p[0] * factor1:0.f;
+	base_y[1] = isfinite(factor1) ? 1.f - pow2f(rfd->v2p[1]) * factor1:1.f;
+	base_y[2] = -rfd->v2p[1];
 
 	memcpy(&test_pa, pa, sizeof(ParticleData));
 	copy_v3_v3(test_pa.prev_state.co, test_pa.state.co);
@@ -1072,157 +1083,230 @@ static void split_positions9(ParticleSimulationData *sim, ParticleData *pa, int 
 	switch(num){
 		case 1:
 			/* Test for split through wall */
-			test_pa.state.co[0] += factor;
+			/*test_pa.state.co[0] += factor;
 			test_pa.state.co[1] += factor;
-			test_pa.state.co[2] += factor;
+			test_pa.state.co[2] += factor;*/
+			madd_v3_v3fl(test_pa.state.co, base_x, factor);
+			madd_v3_v3fl(test_pa.state.co, base_y, factor);
+			madd_v3_v3fl(test_pa.state.co, rfd->v2p, factor);
 
 			if(sim->colliders){
 				i = split_through_wall_test(sim, &test_pa, &hit);
 				if(i)
-					factor = (hit.dist - pa->size * pa->sphmassfac) * sqrt(3.f) / 3.f;
+					factor *= (hit.dist - pa->size * pa->sphmassfac);
 			}
 
-			pa->state.co[0] += factor;
+			madd_v3_v3fl(pa->state.co, base_x, factor);
+			madd_v3_v3fl(pa->state.co, base_y, factor);
+			madd_v3_v3fl(pa->state.co, rfd->v2p, factor);
+			madd_v3_v3fl(pa->prev_state.co, base_x, factor);
+			madd_v3_v3fl(pa->prev_state.co, base_y, factor);
+			madd_v3_v3fl(pa->prev_state.co, rfd->v2p, factor);
+			/*pa->state.co[0] += factor;
 			pa->state.co[1] += factor;
-			pa->state.co[2] += factor;
-			/* Not sure if this is appropriate.*/
+			pa->state.co[2] += factor;*/
+			/* Not sure if this is appropriate.
 			pa->prev_state.co[0] += factor;
 			pa->prev_state.co[1] += factor;
-			pa->prev_state.co[2] += factor;
+			pa->prev_state.co[2] += factor;*/
 			break;
 		case 2:
 			/* Test for split through wall */
-			test_pa.state.co[0] += factor;
+			madd_v3_v3fl(test_pa.state.co, base_x, factor);
+			madd_v3_v3fl(test_pa.state.co, base_y, factor);
+			madd_v3_v3fl(test_pa.state.co, rfd->v2p, -factor);
+			/*test_pa.state.co[0] += factor;
 			test_pa.state.co[1] += factor;
-			test_pa.state.co[2] -= factor;
+			test_pa.state.co[2] -= factor;*/
 
 			if(sim->colliders){
 				i = split_through_wall_test(sim, &test_pa, &hit);
 				if(i)
-					factor = (hit.dist - pa->size * pa->sphmassfac) * sqrt(3.f) / 3.f;
+					factor *= (hit.dist - pa->size * pa->sphmassfac);
 			}
 
-			pa->state.co[0] += factor;
+			madd_v3_v3fl(pa->state.co, base_x, factor);
+			madd_v3_v3fl(pa->state.co, base_y, factor);
+			madd_v3_v3fl(pa->state.co, rfd->v2p, -factor);
+			madd_v3_v3fl(pa->prev_state.co, base_x, factor);
+			madd_v3_v3fl(pa->prev_state.co, base_y, factor);
+			madd_v3_v3fl(pa->prev_state.co, rfd->v2p, -factor);
+			/*pa->state.co[0] += factor;
 			pa->state.co[1] += factor;
 			pa->state.co[2] -= factor;
-			/* Not sure if this is appropriate.*/
+			/* Not sure if this is appropriate.
 			pa->prev_state.co[0] += factor;
 			pa->prev_state.co[1] += factor;
-			pa->prev_state.co[2] -= factor;
+			pa->prev_state.co[2] -= factor;*/
 			break;
 		case 3:
-			test_pa.state.co[0] += factor;
+			madd_v3_v3fl(test_pa.state.co, base_x, factor);
+			madd_v3_v3fl(test_pa.state.co, base_y, -factor);
+			madd_v3_v3fl(test_pa.state.co, rfd->v2p, -factor);
+			/*test_pa.state.co[0] += factor;
 			test_pa.state.co[1] -= factor;
-			test_pa.state.co[2] -= factor;
+			test_pa.state.co[2] -= factor;*/
 
 			if(sim->colliders){
 				i = split_through_wall_test(sim, &test_pa, &hit);
 				if(i)
-					factor = (hit.dist - pa->size * pa->sphmassfac) * sqrt(3.f) / 3.f;
+					factor *= (hit.dist - pa->size * pa->sphmassfac);
 			}
 
-			pa->state.co[0] += factor;
+			madd_v3_v3fl(pa->state.co, base_x, factor);
+			madd_v3_v3fl(pa->state.co, base_y, -factor);
+			madd_v3_v3fl(pa->state.co, rfd->v2p, -factor);
+			madd_v3_v3fl(pa->prev_state.co, base_x, factor);
+			madd_v3_v3fl(pa->prev_state.co, base_y, -factor);
+			madd_v3_v3fl(pa->prev_state.co, rfd->v2p, -factor);
+			/*pa->state.co[0] += factor;
 			pa->state.co[1] -= factor;
 			pa->state.co[2] -= factor;
-			/* Not sure if this is appropriate.*/
+			/* Not sure if this is appropriate.
 			pa->prev_state.co[0] += factor;
 			pa->prev_state.co[1] -= factor;
-			pa->prev_state.co[2] -= factor;
+			pa->prev_state.co[2] -= factor;*/
 			break;
 		case 4:
-			test_pa.state.co[0] -= factor;
+			madd_v3_v3fl(test_pa.state.co, base_x, -factor);
+			madd_v3_v3fl(test_pa.state.co, base_y, -factor);
+			madd_v3_v3fl(test_pa.state.co, rfd->v2p, -factor);
+			/*test_pa.state.co[0] -= factor;
 			test_pa.state.co[1] -= factor;
-			test_pa.state.co[2] -= factor;
+			test_pa.state.co[2] -= factor;*/
 
 			if(sim->colliders){
 				i = split_through_wall_test(sim, &test_pa, &hit);
 				if(i)
-					factor = (hit.dist - pa->size * pa->sphmassfac) * sqrt(3.f) / 3.f;
+					factor *= (hit.dist - pa->size * pa->sphmassfac);
 			}
 
-			pa->state.co[0] -= factor;
+			madd_v3_v3fl(pa->state.co, base_x, -factor);
+			madd_v3_v3fl(pa->state.co, base_y, -factor);
+			madd_v3_v3fl(pa->state.co, rfd->v2p, -factor);
+			madd_v3_v3fl(pa->prev_state.co, base_x, -factor);
+			madd_v3_v3fl(pa->prev_state.co, base_y, -factor);
+			madd_v3_v3fl(pa->prev_state.co, rfd->v2p, -factor);
+			/*pa->state.co[0] -= factor;
 			pa->state.co[1] -= factor;
 			pa->state.co[2] -= factor;
-			/* Not sure if this is appropriate.*/
+			/* Not sure if this is appropriate.
 			pa->prev_state.co[0] -= factor;
 			pa->prev_state.co[1] -= factor;
-			pa->prev_state.co[2] -= factor;
+			pa->prev_state.co[2] -= factor;*/
 			break;
 		case 5:
-			test_pa.state.co[0] -= factor;
+			madd_v3_v3fl(test_pa.state.co, base_x, -factor);
+			madd_v3_v3fl(test_pa.state.co, base_y, factor);
+			madd_v3_v3fl(test_pa.state.co, rfd->v2p, factor);
+			/*test_pa.state.co[0] -= factor;
 			test_pa.state.co[1] += factor;
-			test_pa.state.co[2] += factor;
+			test_pa.state.co[2] += factor;*/
 
 			if(sim->colliders){
 				i = split_through_wall_test(sim, &test_pa, &hit);
 				if(i)
-					factor = (hit.dist - pa->size * pa->sphmassfac) * sqrt(3.f) / 3.f;
+					factor *= (hit.dist - pa->size * pa->sphmassfac);
 			}
 
-			pa->state.co[0] -= factor;
+			madd_v3_v3fl(pa->state.co, base_x, -factor);
+			madd_v3_v3fl(pa->state.co, base_y, factor);
+			madd_v3_v3fl(pa->state.co, rfd->v2p, factor);
+			madd_v3_v3fl(pa->prev_state.co, base_x, -factor);
+			madd_v3_v3fl(pa->prev_state.co, base_y, factor);
+			madd_v3_v3fl(pa->prev_state.co, rfd->v2p, factor);
+			/*pa->state.co[0] -= factor;
 			pa->state.co[1] += factor;
 			pa->state.co[2] += factor;
-			/* Not sure if this is appropriate.*/
+			/* Not sure if this is appropriate.
 			pa->prev_state.co[0] -= factor;
 			pa->prev_state.co[1] += factor;
-			pa->prev_state.co[2] += factor;
+			pa->prev_state.co[2] += factor;*/
 			break;
 		case 6:
-			test_pa.state.co[0] -= factor;
+			madd_v3_v3fl(test_pa.state.co, base_x, -factor);
+			madd_v3_v3fl(test_pa.state.co, base_y, -factor);
+			madd_v3_v3fl(test_pa.state.co, rfd->v2p, factor);
+			/*test_pa.state.co[0] -= factor;
 			test_pa.state.co[1] -= factor;
-			test_pa.state.co[2] += factor;
+			test_pa.state.co[2] += factor;*/
 
 			if(sim->colliders){
 				i = split_through_wall_test(sim, &test_pa, &hit);
 				if(i)
-					factor = (hit.dist - pa->size * pa->sphmassfac) * sqrt(3.f) / 3.f;
+					factor *= (hit.dist - pa->size * pa->sphmassfac);
 			}
 
-			pa->state.co[0] -= factor;
+			madd_v3_v3fl(pa->state.co, base_x, -factor);
+			madd_v3_v3fl(pa->state.co, base_y, -factor);
+			madd_v3_v3fl(pa->state.co, rfd->v2p, factor);
+			madd_v3_v3fl(pa->prev_state.co, base_x, -factor);
+			madd_v3_v3fl(pa->prev_state.co, base_y, -factor);
+			madd_v3_v3fl(pa->prev_state.co, rfd->v2p, factor);
+			/*pa->state.co[0] -= factor;
 			pa->state.co[1] -= factor;
 			pa->state.co[2] += factor;
-			/* Not sure if this is appropriate.*/
+			/* Not sure if this is appropriate.
 			pa->prev_state.co[0] -= factor;
 			pa->prev_state.co[1] -= factor;
-			pa->prev_state.co[2] += factor;
+			pa->prev_state.co[2] += factor;*/
 			break;
 		case 7:
-			test_pa.state.co[0] += factor;
+			madd_v3_v3fl(test_pa.state.co, base_x, factor);
+			madd_v3_v3fl(test_pa.state.co, base_y, -factor);
+			madd_v3_v3fl(test_pa.state.co, rfd->v2p, factor);
+			/*test_pa.state.co[0] += factor;
 			test_pa.state.co[1] -= factor;
-			test_pa.state.co[2] += factor;
+			test_pa.state.co[2] += factor;*/
 
 			if(sim->colliders){
 				i = split_through_wall_test(sim, &test_pa, &hit);
 				if(i)
-					factor = (hit.dist - pa->size * pa->sphmassfac) * sqrt(3.f) / 3.f;
+					factor *= (hit.dist - pa->size * pa->sphmassfac);
 			}
 
-			pa->state.co[0] += factor;
+			madd_v3_v3fl(pa->state.co, base_x, factor);
+			madd_v3_v3fl(pa->state.co, base_y, -factor);
+			madd_v3_v3fl(pa->state.co, rfd->v2p, factor);
+			madd_v3_v3fl(pa->prev_state.co, base_x, factor);
+			madd_v3_v3fl(pa->prev_state.co, base_y, -factor);
+			madd_v3_v3fl(pa->prev_state.co, rfd->v2p, factor);
+
+			/*pa->state.co[0] += factor;
 			pa->state.co[1] -= factor;
 			pa->state.co[2] += factor;
-			/* Not sure if this is appropriate.*/
+			/* Not sure if this is appropriate.
 			pa->prev_state.co[0] += factor;
 			pa->prev_state.co[1] -= factor;
-			pa->prev_state.co[2] += factor;
+			pa->prev_state.co[2] += factor;*/
 			break;
 		case 8:
-			test_pa.state.co[0] -= factor;
+			madd_v3_v3fl(test_pa.state.co, base_x, -factor);
+			madd_v3_v3fl(test_pa.state.co, base_y, factor);
+			madd_v3_v3fl(test_pa.state.co, rfd->v2p, -factor);
+			/*test_pa.state.co[0] -= factor;
 			test_pa.state.co[1] += factor;
-			test_pa.state.co[2] -= factor;
+			test_pa.state.co[2] -= factor;*/
 
 			if(sim->colliders){
 				i = split_through_wall_test(sim, &test_pa, &hit);
 				if(i)
-					factor = (hit.dist - pa->size * pa->sphmassfac) * sqrt(3.f) / 3.f;
+					factor *= (hit.dist - pa->size * pa->sphmassfac);
 			}
 
-			pa->state.co[0] -= factor;
+			madd_v3_v3fl(pa->state.co, base_x, -factor);
+			madd_v3_v3fl(pa->state.co, base_y, factor);
+			madd_v3_v3fl(pa->state.co, rfd->v2p, -factor);
+			madd_v3_v3fl(pa->prev_state.co, base_x, -factor);
+			madd_v3_v3fl(pa->prev_state.co, base_y, factor);
+			madd_v3_v3fl(pa->prev_state.co, rfd->v2p, -factor);
+			/*pa->state.co[0] -= factor;
 			pa->state.co[1] += factor;
 			pa->state.co[2] -= factor;
-			/* Not sure if this is appropriate.*/
+			/* Not sure if this is appropriate.
 			pa->prev_state.co[0] -= factor;
 			pa->prev_state.co[1] += factor;
-			pa->prev_state.co[2] -= factor;
+			pa->prev_state.co[2] -= factor;*/
 			break;
 		default:
 			break;
@@ -1441,7 +1525,7 @@ static void sph_split9(ParticleSimulationData *sim, RefinerData *rfd, int index,
 
 			/* Set position, mass and smoothing length for new particle. */
 			new_pa->sphmassfac *= 0.1f;
-			split_positions9(sim, new_pa, i+1);
+			split_positions9(sim, new_pa, rfd, i+1);
 			new_pa->sphalpha *= 0.75f;
 
 			/* Set state variables. Offset birth time to avoid particle reset. */
@@ -1462,7 +1546,7 @@ static void sph_split9(ParticleSimulationData *sim, RefinerData *rfd, int index,
 
 		/* Set position, mass and smoothing length for new particle. */
 		new_pa->sphmassfac *= 0.1f;
-		split_positions9(sim, new_pa, newparticles+i+1);
+		split_positions9(sim, new_pa, rfd, newparticles+i+1);
 		new_pa->sphalpha *= 0.75f;
 
 		/* Set state variables. Offset birth time to avoid particle reset. */
