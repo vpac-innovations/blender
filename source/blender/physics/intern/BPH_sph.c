@@ -188,26 +188,38 @@ static void sph_evaluate_func(BVHTree *tree, ParticleSystem **psys, float co[3],
   }
 }
 
-static void sph_particle_courant(SPHData *sphdata, SPHRangeData *pfr)
+static void sph_particle_courant(SPHFluidSettings *fluid, SPHData *sphdata, SPHRangeData *pfr)
 {
   ParticleData *pa, *npa;
-  int i;
-  float flow[3], offset[3], dist;
+  int i, tot_nghbrs;
+  float flow[3], offset[3], tot_dist, dist, interaction_radius, h;
+
+  interaction_radius = fluid->radius * (fluid->flag & SPH_FAC_RADIUS ? 4.0f * pa->size : 1.0f);
+  h = interaction_radius * sphdata->hfac;
 
   zero_v3(flow);
 
-  dist = 0.0f;
+  tot_dist = 0.0f;
   if (pfr->tot_neighbors > 0) {
     pa = pfr->pa;
     for (i=0; i < pfr->tot_neighbors; i++) {
       npa = pfr->neighbors[i].psys->particles + pfr->neighbors[i].index;
+
+	  /* Symmetrize kernel to account for varying smoothing lengths. */
+	  pfr->h = (h/2) * (pa->sphalpha + npa->sphalpha);
+
       sub_v3_v3v3(offset, pa->prev_state.co, npa->prev_state.co);
-      dist += len_v3(offset);
-      add_v3_v3(flow, npa->prev_state.vel);
+      dist = len_v3(offset);
+
+	  if(dist < 2.f * pfr->h){
+		  tot_dist += dist;
+		  tot_nghbrs += 1;
+		  add_v3_v3(flow, npa->prev_state.vel);
+	  }
     }
-    dist += sphdata->psys[0]->part->fluid->radius; // TODO: remove this? - z0r            
-    sphdata->element_size = dist / pfr->tot_neighbors;
-    mul_v3_v3fl(sphdata->flow, flow, 1.0f / pfr->tot_neighbors);
+    tot_dist += sphdata->psys[0]->part->fluid->radius; // TODO: remove this? - z0r
+    sphdata->element_size = tot_dist / tot_nghbrs;
+    mul_v3_v3fl(sphdata->flow, flow, 1.0f / tot_nghbrs);
   }
   else {
     sphdata->element_size = FLT_MAX;
@@ -367,7 +379,7 @@ static void sph_force_cb(void *sphdata_v, ParticleKey *state, float *force, floa
 		madd_v3_v3fl(force, gravity, fluid->buoyancy * (pfr.params.density - sphdata->rest_density));
 
 	if (sphdata->pass == 0 && psys[0]->part->time_flag & PART_TIME_AUTOSF)
-		sph_particle_courant(sphdata, &pfr);
+		sph_particle_courant(fluid, sphdata, &pfr);
 	sphdata->pass++;
 }
 
@@ -565,7 +577,7 @@ static void sphclassical_force_cb(void *sphdata_v, ParticleKey *state, float *fo
 		madd_v3_v3fl(force, gravity, fluid->buoyancy * (pfr.params.density - sphdata->rest_density));
 
 	if (sphdata->pass == 0 && psys[0]->part->time_flag & PART_TIME_AUTOSF)
-		sph_particle_courant(sphdata, &pfr);
+		sph_particle_courant(fluid, sphdata, &pfr);
 	sphdata->pass++;
 }
 
