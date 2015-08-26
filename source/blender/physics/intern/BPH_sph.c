@@ -447,7 +447,7 @@ static void sphclassical_neighbour_accum_cb(void *userdata, int index, float squ
   if (pfr->pa == NULL) {
     rij = sqrtf(squared_dist);
   } else {
-    sub_v3_v3v3(vec, npa->state.co, pfr->pa->state.co);
+    sub_v3_v3v3(vec, npa->prev_state.co, pfr->pa->prev_state.co);
     rij = len_v3(vec);
   }
   rij_h = rij / pfr->h;
