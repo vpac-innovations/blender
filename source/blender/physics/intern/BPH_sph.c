@@ -804,7 +804,7 @@ static void sphclassical_check_refiners(ListBase *refiners, RefinerData* rfd, Pa
 			eps = 0.1f * sref->pr->min_mass;
 			if (sref->pr->falloff_flag){
 				upper_bound = MIN2(MAX2(sref->pr->min_mass+eps, sref->pr->split_ratio * grad * dist), 1.1f);
-				lower_bound = MIN2(MAX2(sref->pr->min_mass-eps, grad * dist), 0.9f);
+				lower_bound = MIN2(MAX2(sref->pr->min_mass-eps, grad * (dist - offset)), 0.9f);
 
 				if (upper_bound < pa->sphmaxmass || lower_bound < pa->sphminmass){
 					pa->sphmaxmass = upper_bound < pa->sphmaxmass ? upper_bound:pa->sphmaxmass;
@@ -846,14 +846,14 @@ static int nearest_split(ParticleSimulationData *sim, SPHRangeData *pfr)
 	pfn = pfr->neighbors;
 	for(p=0; p < pfr->tot_neighbors; p++, pfn++){
 		npa = pfn->psys->particles + pfn->index;
-		if(pa->sphmassfac+npa->sphmassfac >= 1.1f || npa->alive != PARS_ALIVE || npa == pa){
+		if(pa->sphmassfac+npa->sphmassfac >= pa->sphmaxmass || npa->alive != PARS_ALIVE || npa == pa){
 			continue;
 		}
 
 		/* Update particle mass limits from refiners. */
 		sphclassical_check_refiners(psys->refiners, &rfd, npa, offset);
 
-		if(npa->sphmassfac > npa->sphminmass)
+		if(npa->sphmassfac > pa->sphminmass)
 			continue;
 
 		sub_v3_v3v3(vec, pa->state.co, npa->state.co);
@@ -885,7 +885,7 @@ void BPH_sph_unsplit_particle(ParticleSimulationData *sim, float cfra)
 	psys_sph_init(sim, &sphdata);
 
 	LOOP_DYNAMIC_PARTICLES{
-		if((pa->alive != PARS_ALIVE || pa->sphmassfac > 0.91f || pa->adptv == PARS_UNADAPTABLE)){
+		if((pa->alive != PARS_ALIVE || pa->adptv == PARS_UNADAPTABLE)){
 			continue;
 		}
 
@@ -948,12 +948,16 @@ static void split_positions2(ParticleSimulationData *sim, ParticleData *pa, Refi
 {
 	ParticleData test_pa;
 	BVHTreeRayHit hit;
-	float eps = (pa->size) * pa->sphmassfac;
+	SPHFluidSettings *fluid = sim->psys->part->fluid;
+	float h, eps;
 	float factor1 = 1.f / pow(2.f, 1.f / 3.f);
 	float factor2 = 1.f;
 	float factor3 = (1.f - rfd->v2p[2]) / (pow2f(rfd->v2p[0]) + pow2f(rfd->v2p[1]));
 	float basis[3];
 	int i;
+
+	h = 0.5f * fluid->radius * (fluid->flag & SPH_FAC_RADIUS ? 4.0f * pa->size : 1.0f);
+	eps = 0.5f * pa->sphalpha * h;
 
 	basis[0] = isfinite(factor3) ? 1.f - pow2f(rfd->v2p[0]) * factor3:1.f;
 	basis[1] = isfinite(factor3) ? -rfd->v2p[0] * rfd->v2p[1] * factor3:0.f;
@@ -998,7 +1002,8 @@ static void split_positions3(ParticleSimulationData *sim, ParticleData *pa, Refi
 {
 	ParticleData test_pa;
 	BVHTreeRayHit hit;
-	float eps = (pa->size) * pa->sphmassfac;
+	SPHFluidSettings *fluid = sim->psys->part->fluid;
+	float h, eps;
 	float factor1 = 1.f / pow(3.f, 1.f / 3.f);
 	float factor2 = sqrt(5.f) / 3.f;
 	float factor3 = 1.f;
@@ -1006,6 +1011,9 @@ static void split_positions3(ParticleSimulationData *sim, ParticleData *pa, Refi
 	float base_x[3];
 	float base_y[3];
 	int i;
+
+	h = 0.5f * fluid->radius * (fluid->flag & SPH_FAC_RADIUS ? 4.0f * pa->size : 1.0f);
+	eps = 0.5f * pa->sphalpha * h;
 
 	base_x[0] = isfinite(factor4) ? 1.f - pow2f(rfd->v2p[0]) * factor4:1.f;
 	base_x[1] = isfinite(factor4) ? -rfd->v2p[0] * rfd->v2p[1] * factor4:0.f;
