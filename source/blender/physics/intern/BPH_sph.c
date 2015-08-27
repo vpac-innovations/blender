@@ -194,14 +194,14 @@ static void sph_particle_courant(SPHFluidSettings *fluid, SPHData *sphdata, SPHR
   int i, tot_nghbrs;
   float flow[3], offset[3], tot_dist, dist, interaction_radius, h;
 
-  interaction_radius = fluid->radius * (fluid->flag & SPH_FAC_RADIUS ? 4.0f * pa->size : 1.0f);
-  h = interaction_radius * sphdata->hfac;
-
   zero_v3(flow);
-
   tot_dist = 0.0f;
+  tot_nghbrs = 0;
+
   if (pfr->tot_neighbors > 0) {
     pa = pfr->pa;
+    interaction_radius = fluid->radius * (fluid->flag & SPH_FAC_RADIUS ? 4.0f * pa->size : 1.0f);
+    h = interaction_radius * sphdata->hfac;
     for (i=0; i < pfr->tot_neighbors; i++) {
       npa = pfr->neighbors[i].psys->particles + pfr->neighbors[i].index;
 
