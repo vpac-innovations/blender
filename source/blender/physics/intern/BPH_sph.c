@@ -744,7 +744,7 @@ static int split_through_wall_test(ParticleSimulationData *sim, ParticleData *pa
 		bvhtree_from_mesh_faces(&treeData, current->derivedFinal, 0.0f, 4, 6);
 
 		/* Ray cast. */
-		BLI_bvhtree_ray_cast(treeData.tree, ray_start, ray_dir, pa->size * pa->sphalpha, hit, treeData.raycast_callback, &treeData);
+		BLI_bvhtree_ray_cast(treeData.tree, ray_start, ray_dir, pa->size*pa->sphmassfac, hit, treeData.raycast_callback, &treeData);
 
 		/* Throw out new hit distance if previous one was shorter. */
 		if(old_dist < hit->dist)
@@ -948,7 +948,7 @@ static void split_positions2(ParticleSimulationData *sim, ParticleData *pa, Refi
 {
 	ParticleData test_pa;
 	BVHTreeRayHit hit;
-	float eps = (pa->size) * pa->sphalpha;
+	float eps = (pa->size) * pa->sphmassfac;
 	float factor1 = 1.f / pow(2.f, 1.f / 3.f);
 	float factor2 = 1.f;
 	float factor3 = (1.f - rfd->v2p[2]) / (pow2f(rfd->v2p[0]) + pow2f(rfd->v2p[1]));
@@ -998,7 +998,7 @@ static void split_positions3(ParticleSimulationData *sim, ParticleData *pa, Refi
 {
 	ParticleData test_pa;
 	BVHTreeRayHit hit;
-	float eps = (pa->size) * pa->sphalpha;
+	float eps = (pa->size) * pa->sphmassfac;
 	float factor1 = 1.f / pow(3.f, 1.f / 3.f);
 	float factor2 = sqrt(5.f) / 3.f;
 	float factor3 = 1.f;
