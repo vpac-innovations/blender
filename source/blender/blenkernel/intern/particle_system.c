@@ -311,7 +311,7 @@ void psys_deadpars_init(DeadParticles* deadpars)
 {
 	deadpars->data = MEM_callocN(1000*sizeof(int), "dead particles");
 	deadpars->capacity = 1000;
-	deadpars->size= 0;
+	deadpars->size = 0;
 }
 
 /************************************************/
@@ -2905,22 +2905,13 @@ static void dynamics_step(ParticleSimulationData *sim, float cfra)
 				  * Bonet 2007 and Vacondio et al. 2013. */
 
 				  /* Initialize storage for dead particle re-use */
-				  if(cfra == 1){
+				  if(!psys->deadpars.data){
 					  psys_deadpars_init(&psys->deadpars);
 				  }
 
 				  /* Update/initialize refiner BVH trees */
 				  BPH_sph_adptv_res_init(sim, psys);
 
-/*				  if (cfra > 9 && cfra < 50000) {
-					  LOOP_DYNAMIC_PARTICLES{
-						  if(pa->alive == PARS_ALIVE && pa->adptv == PARS_ADAPTABLE){
-							  //BPH_sph_split9(sim, p, cfra);
-							  BPH_sph_split3(sim, p, cfra);
-							  //BPH_sph_split2(sim, p, cfra);
-						  }
-					  }
-				  }*/
 				  if (cfra > 809 && cfra < 50000){
 					  BPH_sph_split_particle(sim, cfra);
 					  BPH_sph_unsplit_particle(sim, cfra);
