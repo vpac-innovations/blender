@@ -142,6 +142,16 @@ static EnumPropertyItem *rna_Refiner_type_itemf(bContext *UNUSED(C), PointerRNA 
 	return refiner_type_items;
 }
 
+static void rna_RefinerSettings_shape_update(Main *bmain, Scene *scene, PointerRNA *ptr)
+{
+	if (!particle_id_check(ptr)) {
+		Object *ob = (Object *)ptr->id.data;
+		ED_object_check_refiner_modifiers(bmain, scene, ob);
+		WM_main_add_notifier(NC_OBJECT | ND_DRAW, ob);
+		WM_main_add_notifier(NC_OBJECT | ND_MODIFIER, ob);
+	}
+}
+
 static void rna_RefinerSettings_type_update(Main *bmain, Scene *scene, PointerRNA *ptr)
 {
 	if (!particle_id_check(ptr)) {
@@ -184,7 +194,7 @@ static void rna_RefinerSettings_split_update(Main *bmain, Scene *scene, PointerR
 		WM_main_add_notifier(NC_OBJECT | ND_MODIFIER, ob);
 	}
 }
-/*
+
 static void rna_RefinerSettings_dependency_update(Main *bmain, Scene *scene, PointerRNA *ptr)
 {
 	if (particle_id_check(ptr)) {
@@ -193,7 +203,7 @@ static void rna_RefinerSettings_dependency_update(Main *bmain, Scene *scene, Poi
 	else {
 		Object *ob = (Object *)ptr->id.data;
 
-		rna_FieldSettings_shape_update(bmain, scene, ptr);
+		rna_RefinerSettings_shape_update(bmain, scene, ptr);
 
 		DAG_relations_tag_update(bmain);
 
@@ -201,7 +211,8 @@ static void rna_RefinerSettings_dependency_update(Main *bmain, Scene *scene, Poi
 
 		WM_main_add_notifier(NC_OBJECT | ND_DRAW, ob);
 	}
-}*/
+}
+
 static char *rna_RefinerSettings_path(PointerRNA *ptr)
 {
 	PartRefine *pr = (PartRefine *)ptr->data;
@@ -234,7 +245,8 @@ static void rna_def_refiner(BlenderRNA *brna)
 	RNA_def_property_enum_items(prop, refiner_type_items);
 	RNA_def_property_enum_funcs(prop, NULL, NULL, "rna_Refiner_type_itemf");
 	RNA_def_property_ui_text(prop, "Refiner", "Measure distance from particle to refiner using objects' verts, edges or faces");
-	RNA_def_property_update(prop, 0, "rna_RefinerSettings_type_update");
+	RNA_def_property_update(prop, 0, "rna_RefinerSettings_dependency_update");
+	//RNA_def_property_update(prop, 0, "rna_RefinerSettings_type_update");
 
 	prop = RNA_def_property(srna, "ratio", PROP_ENUM, PROP_NONE);
 	RNA_def_property_enum_sdna(prop, NULL, "split_ratio");
