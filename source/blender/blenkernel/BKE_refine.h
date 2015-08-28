@@ -11,10 +11,14 @@ void prEndRefiners(struct ListBase **refiners);
 
 typedef struct SPHRefiner {
 	struct SPHRefiner *next, *prev;
-	struct PartRefine *pr;
-	struct Object *ob;
+
 	struct Scene *scene;
+	struct Object *ob;
+	struct ParticleSystem *psys;
 	struct SurfaceModifierData *surmd;
+
+	struct PartRefine *pr;
+
 	float co[3];
 	float nor[3];
 	float vec_to_particle[3];

@@ -1639,6 +1639,7 @@ static void write_objects(WriteData *wd, ListBase *idbase)
 			write_motionpath(wd, ob->mpath);
 			
 			writestruct(wd, DATA, "PartDeflect", 1, ob->pd);
+			writestruct(wd, DATA, "PartRefine", 1, ob->pr);
 			writestruct(wd, DATA, "SoftBody", 1, ob->soft);
 			if (ob->soft) {
 				write_pointcaches(wd, &ob->soft->ptcaches);

@@ -5018,6 +5018,9 @@ static void direct_link_object(FileData *fd, Object *ob)
 	
 	ob->pd= newdataadr(fd, ob->pd);
 	direct_link_partdeflect(ob->pd);
+
+	ob->pr= newdataadr(fd, ob->pr);
+
 	ob->soft= newdataadr(fd, ob->soft);
 	if (ob->soft) {
 		SoftBody *sb = ob->soft;
