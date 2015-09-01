@@ -3923,6 +3923,7 @@ static void direct_link_particlesystems(FileData *fd, ListBase *particles)
 		
 		psys->child = newdataadr(fd, psys->child);
 		psys->effectors = NULL;
+		psys->refiners = NULL;
 		
 		link_list(fd, &psys->targets);
 		
