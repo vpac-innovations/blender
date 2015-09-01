@@ -337,7 +337,7 @@ typedef struct ParticleSystem {
 
 	float dt_frac;							/* current time step, as a fraction of a frame */
 	float _pad;								/* spare capacity */
-	DeadParticles deadpars;
+	DeadParticles *deadpars;
 	int totadded;
 	int pad1;
 } ParticleSystem;

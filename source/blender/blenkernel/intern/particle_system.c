@@ -307,11 +307,17 @@ int psys_get_tot_child(Scene *scene, ParticleSystem *psys)
 	return psys->totpart*psys_get_child_number(scene, psys);
 }
 
-void psys_deadpars_init(DeadParticles* deadpars)
+static DeadParticles *psys_deadpars_init()
 {
-	deadpars->data = MEM_callocN(1000*sizeof(int), "dead particles");
-	deadpars->capacity = 1000;
-	deadpars->size = 0;
+	DeadParticles *deadpars = MEM_callocN(sizeof(DeadParticles), "DeadParticles");
+
+	if(deadpars) {
+		deadpars->data = MEM_callocN(1000*sizeof(int), "dead particles");
+		deadpars->capacity = 1000;
+		deadpars->size = 0;
+	}
+
+	return deadpars;
 }
 
 /************************************************/
@@ -2905,8 +2911,8 @@ static void dynamics_step(ParticleSimulationData *sim, float cfra)
 				  * Bonet 2007 and Vacondio et al. 2013. */
 
 				  /* Initialize storage for dead particle re-use */
-				  if(!psys->deadpars.data){
-					  psys_deadpars_init(&psys->deadpars);
+				  if(!psys->deadpars){
+					  psys->deadpars = psys_deadpars_init();
 				  }
 
 				  /* Update/initialize refiner BVH trees */

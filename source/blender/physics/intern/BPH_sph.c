@@ -940,7 +940,7 @@ void BPH_sph_unsplit_particle(ParticleSimulationData *sim, float cfra)
 		/* -- Kill other particle. */
 		npa->dietime = cfra + 0.001/((float)(psys->part->subframes + 1));
 		npa->alive = PARS_DEAD;
-		psys_deadpars_add(&psys->deadpars, index_n);
+		psys_deadpars_add(psys->deadpars, index_n);
 	}
 }
 
@@ -1403,7 +1403,7 @@ static void sph_split2(ParticleSimulationData *sim, RefinerData *rfd, int index,
 	ParticleData *pa, *new_pa;
 	int oldtotpart = psys->totpart;
 	int newtotpart;
-	int newparticles = 1 - psys->deadpars.size;
+	int newparticles = 1 - psys->deadpars->size;
 	int i;
 
 	pa = psys->particles + index;
@@ -1435,7 +1435,7 @@ static void sph_split2(ParticleSimulationData *sim, RefinerData *rfd, int index,
 		newparticles = 0;
 
 	for(i = 0; i < 1 - newparticles; i++){
-		new_pa = psys->particles + psys->deadpars.data[psys->deadpars.size - 1 - i];
+		new_pa = psys->particles + psys->deadpars->data[psys->deadpars->size - 1 - i];
 		memcpy(new_pa, pa, sizeof(ParticleData));
 
 		split_positions2(sim, new_pa, rfd, newparticles + i + 1);
@@ -1455,7 +1455,7 @@ static void sph_split2(ParticleSimulationData *sim, RefinerData *rfd, int index,
 
 	pa->adptv = PARS_UNADAPTABLE;
 
-	psys->deadpars.size -= 1 - newparticles;
+	psys->deadpars->size -= 1 - newparticles;
 }
 
 static void sph_split3(ParticleSimulationData *sim, RefinerData *rfd, int index, float cfra)
@@ -1465,7 +1465,7 @@ static void sph_split3(ParticleSimulationData *sim, RefinerData *rfd, int index,
 	ParticleData *pa, *new_pa;
 	int oldtotpart = psys->totpart;
 	int newtotpart;
-	int newparticles = 2 - psys->deadpars.size;
+	int newparticles = 2 - psys->deadpars->size;
 	int i;
 
 	pa = psys->particles + index;
@@ -1497,7 +1497,7 @@ static void sph_split3(ParticleSimulationData *sim, RefinerData *rfd, int index,
 		newparticles = 0;
 
 	for(i = 0; i < 2 - newparticles; i++){
-		new_pa = psys->particles + psys->deadpars.data[psys->deadpars.size - 1 - i];
+		new_pa = psys->particles + psys->deadpars->data[psys->deadpars->size - 1 - i];
 		memcpy(new_pa, pa, sizeof(ParticleData));
 
 		split_positions3(sim, new_pa, rfd, newparticles + i + 1);
@@ -1517,7 +1517,7 @@ static void sph_split3(ParticleSimulationData *sim, RefinerData *rfd, int index,
 
 	pa->adptv = PARS_UNADAPTABLE;
 
-	psys->deadpars.size -= 2 - newparticles;
+	psys->deadpars->size -= 2 - newparticles;
 }
 
 static void sph_split9(ParticleSimulationData *sim, RefinerData *rfd, int index, float cfra)
@@ -1527,7 +1527,7 @@ static void sph_split9(ParticleSimulationData *sim, RefinerData *rfd, int index,
 	ParticleData *pa, *new_pa;
 	int oldtotpart = psys->totpart;
 	int newtotpart;
-	int newparticles = 8 - psys->deadpars.size;
+	int newparticles = 8 - psys->deadpars->size;
 	int i;
 
 	pa = psys->particles + index;
@@ -1561,7 +1561,7 @@ static void sph_split9(ParticleSimulationData *sim, RefinerData *rfd, int index,
 		newparticles = 0;
 
 	for(i = 0; i < 8 - newparticles; i++){
-		new_pa = psys->particles+psys->deadpars.data[psys->deadpars.size-1-i];
+		new_pa = psys->particles+psys->deadpars->data[psys->deadpars->size-1-i];
 		memcpy(new_pa, pa, sizeof(ParticleData));
 
 		/* Set position, mass and smoothing length for new particle. */
@@ -1580,7 +1580,7 @@ static void sph_split9(ParticleSimulationData *sim, RefinerData *rfd, int index,
 	pa->sphmassfac *= 0.2f;
 	pa->adptv = PARS_UNADAPTABLE;
 
-	psys->deadpars.size -= 8 - newparticles;
+	psys->deadpars->size -= 8 - newparticles;
 }
 
 void BPH_sph_split_particle(ParticleSimulationData *sim, float cfra){
