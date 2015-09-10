@@ -31,7 +31,8 @@ typedef struct PartRefine {
 	float radius;
 	float max_mass;
 	float min_mass;
-	float falloff;
+	float falloff_grad;
+	float falloff_offset;
 	int split_ratio;
 	int falloff_flag;
 	short refine_type;
@@ -41,7 +42,6 @@ typedef struct PartRefine {
 /* PartRefine->falloff_flag */
 #define NO_FALLOFF	0
 #define USE_FALLOFF	1
-
 
 #ifdef __cplusplus
 }

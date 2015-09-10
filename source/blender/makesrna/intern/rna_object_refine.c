@@ -266,6 +266,7 @@ static void rna_def_refiner(BlenderRNA *brna)
 	prop = RNA_def_property(srna, "radius", PROP_FLOAT, PROP_NONE);
 	RNA_def_property_float_sdna(prop, NULL, "radius");
 	RNA_def_property_range(prop, 0.0f, FLT_MAX);
+	RNA_def_property_ui_range(prop, 0.0f, FLT_MAX, 1, 4);
 	RNA_def_property_ui_text(prop, "Radius", "Radius within which adaptive resolution is active");
 	RNA_def_property_update(prop, 0, "rna_RefinerSettings_update");
 
@@ -282,9 +283,15 @@ static void rna_def_refiner(BlenderRNA *brna)
 	RNA_def_property_update(prop, 0, "rna_RefinerSettings_update");
 
 	prop = RNA_def_property(srna, "falloff_gradient", PROP_FLOAT, PROP_NONE);
-	RNA_def_property_float_sdna(prop, NULL, "falloff");
+	RNA_def_property_float_sdna(prop, NULL, "falloff_grad");
 	RNA_def_property_range(prop, 0.0f, FLT_MAX);
 	RNA_def_property_ui_text(prop, "Falloff gradient", "Gradient of linear falloff function");
+	RNA_def_property_update(prop, 0, "rna_RefinerSettings_update");
+
+	prop = RNA_def_property(srna, "falloff_offset", PROP_FLOAT, PROP_NONE);
+	RNA_def_property_float_sdna(prop, NULL, "falloff_offset");
+	RNA_def_property_range(prop, 0.0f, FLT_MAX);
+	RNA_def_property_ui_text(prop, "Falloff offset", "Offset of linear falloff function");
 	RNA_def_property_update(prop, 0, "rna_RefinerSettings_update");
 
 	/* Misc?*/

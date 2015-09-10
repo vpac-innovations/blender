@@ -50,7 +50,8 @@ PartRefine *object_add_refiner(int type)
 
 	pr->refine_type = type;
 	pr->radius = 0.05f;
-	pr->falloff = 1.f;
+	pr->falloff_grad = 1.f;
+	pr->falloff_offset = 0.f;
 	pr->split_ratio = SPLIT2;
 	pr->nsplits = REFINE_ONCE;
 	pr->falloff_flag = NO_FALLOFF;
@@ -82,8 +83,8 @@ static void add_object_to_refiners(ListBase **refiners, Scene *scene, Object *ob
 	if (ob == ob_src)
 		return;
 
-	/* derivedFinal may have been released in a separate function on
-	 * another thread, hold here until it exists.
+	/* derivedFinal may have been released on another thread,
+	 * hold here until it exists.
 	 * TODO: Find a better solution. */
 	while(ob->type == OB_MESH && !ob->derivedFinal){
 	}

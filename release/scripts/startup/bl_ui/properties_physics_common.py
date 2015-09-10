@@ -331,6 +331,8 @@ def basic_refiner_settings_ui(self, context, refiner):
     if refiner.use_falloff:
        split = layout.split()
        split.prop(refiner, "falloff_gradient")
+       split = layout.split()
+       split.prop(refiner, "falloff_offset")
     else:
        split = layout.split()
        split.prop(refiner, "radius")

@@ -758,7 +758,7 @@ static int split_through_wall_test(ParticleSimulationData *sim, ParticleData *pa
 static void sphclassical_check_refiners(ListBase *refiners, RefinerData* rfd, ParticleData *pa, float offset)
 {
 	SPHRefiner *sref;
-	float vec[3], dist, upper_bound, lower_bound, grad, eps;
+	float vec[3], dist, upper_bound, lower_bound, grad, offs, eps;
 	int ret = 0;
 
 	if(refiners) for(sref = refiners->first; sref; sref=sref->next) {
@@ -800,11 +800,12 @@ static void sphclassical_check_refiners(ListBase *refiners, RefinerData* rfd, Pa
 		if(ret){
 			sub_v3_v3v3(sref->vec_to_particle, pa->state.co, sref->co);
 			dist = normalize_v3(sref->vec_to_particle);
-			grad = sref->pr->falloff;
+			grad = sref->pr->falloff_grad;
+			offs = sref->pr->falloff_offset;
 			eps = 0.1f * sref->pr->min_mass;
 			if (sref->pr->falloff_flag){
-				upper_bound = MIN2(MAX2(sref->pr->min_mass+eps, sref->pr->split_ratio * grad * dist), 1.1f);
-				lower_bound = MIN2(MAX2(sref->pr->min_mass-eps, grad * (dist - offset)), 0.9f);
+				upper_bound = MIN2(MAX2(sref->pr->min_mass+eps, sref->pr->split_ratio * grad * (dist - offs)), 1.1f);
+				lower_bound = MIN2(MAX2(sref->pr->min_mass-eps, grad * (dist - offset - offs)), 0.9f);
 
 				if (upper_bound < pa->sphmaxmass || lower_bound < pa->sphminmass){
 					pa->sphmaxmass = upper_bound < pa->sphmaxmass ? upper_bound:pa->sphmaxmass;
@@ -1103,9 +1104,6 @@ static void split_positions9(ParticleSimulationData *sim, ParticleData *pa, Refi
 	switch(num){
 		case 1:
 			/* Test for split through wall */
-			/*test_pa.state.co[0] += factor;
-			test_pa.state.co[1] += factor;
-			test_pa.state.co[2] += factor;*/
 			madd_v3_v3fl(test_pa.state.co, base_x, factor);
 			madd_v3_v3fl(test_pa.state.co, base_y, factor);
 			madd_v3_v3fl(test_pa.state.co, rfd->v2p, factor);
@@ -1122,22 +1120,12 @@ static void split_positions9(ParticleSimulationData *sim, ParticleData *pa, Refi
 			madd_v3_v3fl(pa->prev_state.co, base_x, factor);
 			madd_v3_v3fl(pa->prev_state.co, base_y, factor);
 			madd_v3_v3fl(pa->prev_state.co, rfd->v2p, factor);
-			/*pa->state.co[0] += factor;
-			pa->state.co[1] += factor;
-			pa->state.co[2] += factor;*/
-			/* Not sure if this is appropriate.
-			pa->prev_state.co[0] += factor;
-			pa->prev_state.co[1] += factor;
-			pa->prev_state.co[2] += factor;*/
 			break;
 		case 2:
 			/* Test for split through wall */
 			madd_v3_v3fl(test_pa.state.co, base_x, factor);
 			madd_v3_v3fl(test_pa.state.co, base_y, factor);
 			madd_v3_v3fl(test_pa.state.co, rfd->v2p, -factor);
-			/*test_pa.state.co[0] += factor;
-			test_pa.state.co[1] += factor;
-			test_pa.state.co[2] -= factor;*/
 
 			if(sim->colliders){
 				i = split_through_wall_test(sim, &test_pa, &hit);
@@ -1151,21 +1139,11 @@ static void split_positions9(ParticleSimulationData *sim, ParticleData *pa, Refi
 			madd_v3_v3fl(pa->prev_state.co, base_x, factor);
 			madd_v3_v3fl(pa->prev_state.co, base_y, factor);
 			madd_v3_v3fl(pa->prev_state.co, rfd->v2p, -factor);
-			/*pa->state.co[0] += factor;
-			pa->state.co[1] += factor;
-			pa->state.co[2] -= factor;
-			/* Not sure if this is appropriate.
-			pa->prev_state.co[0] += factor;
-			pa->prev_state.co[1] += factor;
-			pa->prev_state.co[2] -= factor;*/
 			break;
 		case 3:
 			madd_v3_v3fl(test_pa.state.co, base_x, factor);
 			madd_v3_v3fl(test_pa.state.co, base_y, -factor);
 			madd_v3_v3fl(test_pa.state.co, rfd->v2p, -factor);
-			/*test_pa.state.co[0] += factor;
-			test_pa.state.co[1] -= factor;
-			test_pa.state.co[2] -= factor;*/
 
 			if(sim->colliders){
 				i = split_through_wall_test(sim, &test_pa, &hit);
@@ -1179,21 +1157,11 @@ static void split_positions9(ParticleSimulationData *sim, ParticleData *pa, Refi
 			madd_v3_v3fl(pa->prev_state.co, base_x, factor);
 			madd_v3_v3fl(pa->prev_state.co, base_y, -factor);
 			madd_v3_v3fl(pa->prev_state.co, rfd->v2p, -factor);
-			/*pa->state.co[0] += factor;
-			pa->state.co[1] -= factor;
-			pa->state.co[2] -= factor;
-			/* Not sure if this is appropriate.
-			pa->prev_state.co[0] += factor;
-			pa->prev_state.co[1] -= factor;
-			pa->prev_state.co[2] -= factor;*/
 			break;
 		case 4:
 			madd_v3_v3fl(test_pa.state.co, base_x, -factor);
 			madd_v3_v3fl(test_pa.state.co, base_y, -factor);
 			madd_v3_v3fl(test_pa.state.co, rfd->v2p, -factor);
-			/*test_pa.state.co[0] -= factor;
-			test_pa.state.co[1] -= factor;
-			test_pa.state.co[2] -= factor;*/
 
 			if(sim->colliders){
 				i = split_through_wall_test(sim, &test_pa, &hit);
@@ -1207,21 +1175,11 @@ static void split_positions9(ParticleSimulationData *sim, ParticleData *pa, Refi
 			madd_v3_v3fl(pa->prev_state.co, base_x, -factor);
 			madd_v3_v3fl(pa->prev_state.co, base_y, -factor);
 			madd_v3_v3fl(pa->prev_state.co, rfd->v2p, -factor);
-			/*pa->state.co[0] -= factor;
-			pa->state.co[1] -= factor;
-			pa->state.co[2] -= factor;
-			/* Not sure if this is appropriate.
-			pa->prev_state.co[0] -= factor;
-			pa->prev_state.co[1] -= factor;
-			pa->prev_state.co[2] -= factor;*/
 			break;
 		case 5:
 			madd_v3_v3fl(test_pa.state.co, base_x, -factor);
 			madd_v3_v3fl(test_pa.state.co, base_y, factor);
 			madd_v3_v3fl(test_pa.state.co, rfd->v2p, factor);
-			/*test_pa.state.co[0] -= factor;
-			test_pa.state.co[1] += factor;
-			test_pa.state.co[2] += factor;*/
 
 			if(sim->colliders){
 				i = split_through_wall_test(sim, &test_pa, &hit);
@@ -1235,21 +1193,11 @@ static void split_positions9(ParticleSimulationData *sim, ParticleData *pa, Refi
 			madd_v3_v3fl(pa->prev_state.co, base_x, -factor);
 			madd_v3_v3fl(pa->prev_state.co, base_y, factor);
 			madd_v3_v3fl(pa->prev_state.co, rfd->v2p, factor);
-			/*pa->state.co[0] -= factor;
-			pa->state.co[1] += factor;
-			pa->state.co[2] += factor;
-			/* Not sure if this is appropriate.
-			pa->prev_state.co[0] -= factor;
-			pa->prev_state.co[1] += factor;
-			pa->prev_state.co[2] += factor;*/
 			break;
 		case 6:
 			madd_v3_v3fl(test_pa.state.co, base_x, -factor);
 			madd_v3_v3fl(test_pa.state.co, base_y, -factor);
 			madd_v3_v3fl(test_pa.state.co, rfd->v2p, factor);
-			/*test_pa.state.co[0] -= factor;
-			test_pa.state.co[1] -= factor;
-			test_pa.state.co[2] += factor;*/
 
 			if(sim->colliders){
 				i = split_through_wall_test(sim, &test_pa, &hit);
@@ -1263,21 +1211,11 @@ static void split_positions9(ParticleSimulationData *sim, ParticleData *pa, Refi
 			madd_v3_v3fl(pa->prev_state.co, base_x, -factor);
 			madd_v3_v3fl(pa->prev_state.co, base_y, -factor);
 			madd_v3_v3fl(pa->prev_state.co, rfd->v2p, factor);
-			/*pa->state.co[0] -= factor;
-			pa->state.co[1] -= factor;
-			pa->state.co[2] += factor;
-			/* Not sure if this is appropriate.
-			pa->prev_state.co[0] -= factor;
-			pa->prev_state.co[1] -= factor;
-			pa->prev_state.co[2] += factor;*/
 			break;
 		case 7:
 			madd_v3_v3fl(test_pa.state.co, base_x, factor);
 			madd_v3_v3fl(test_pa.state.co, base_y, -factor);
 			madd_v3_v3fl(test_pa.state.co, rfd->v2p, factor);
-			/*test_pa.state.co[0] += factor;
-			test_pa.state.co[1] -= factor;
-			test_pa.state.co[2] += factor;*/
 
 			if(sim->colliders){
 				i = split_through_wall_test(sim, &test_pa, &hit);
@@ -1292,21 +1230,11 @@ static void split_positions9(ParticleSimulationData *sim, ParticleData *pa, Refi
 			madd_v3_v3fl(pa->prev_state.co, base_y, -factor);
 			madd_v3_v3fl(pa->prev_state.co, rfd->v2p, factor);
 
-			/*pa->state.co[0] += factor;
-			pa->state.co[1] -= factor;
-			pa->state.co[2] += factor;
-			/* Not sure if this is appropriate.
-			pa->prev_state.co[0] += factor;
-			pa->prev_state.co[1] -= factor;
-			pa->prev_state.co[2] += factor;*/
 			break;
 		case 8:
 			madd_v3_v3fl(test_pa.state.co, base_x, -factor);
 			madd_v3_v3fl(test_pa.state.co, base_y, factor);
 			madd_v3_v3fl(test_pa.state.co, rfd->v2p, -factor);
-			/*test_pa.state.co[0] -= factor;
-			test_pa.state.co[1] += factor;
-			test_pa.state.co[2] -= factor;*/
 
 			if(sim->colliders){
 				i = split_through_wall_test(sim, &test_pa, &hit);
@@ -1320,13 +1248,6 @@ static void split_positions9(ParticleSimulationData *sim, ParticleData *pa, Refi
 			madd_v3_v3fl(pa->prev_state.co, base_x, -factor);
 			madd_v3_v3fl(pa->prev_state.co, base_y, factor);
 			madd_v3_v3fl(pa->prev_state.co, rfd->v2p, -factor);
-			/*pa->state.co[0] -= factor;
-			pa->state.co[1] += factor;
-			pa->state.co[2] -= factor;
-			/* Not sure if this is appropriate.
-			pa->prev_state.co[0] -= factor;
-			pa->prev_state.co[1] += factor;
-			pa->prev_state.co[2] -= factor;*/
 			break;
 		default:
 			break;
@@ -1356,8 +1277,8 @@ void BPH_sph_adptv_res_init(ParticleSimulationData *sim, ParticleSystem *psys)
 	if(refiners) for(sref = refiners->first; sref; sref=sref->next) {
 		current = sref->ob;
 		if (current->type == OB_MESH){
-			/* derivedFinal may have been released in a separate function on
-			 * another thread, hold here until it exists.
+			/* derivedFinal may have been released on another thread,
+			 * hold here until it exists.
 			 * TODO: Find a better solution. */
 			while(!current->derivedFinal){
 			}
