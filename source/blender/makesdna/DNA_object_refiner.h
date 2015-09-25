@@ -29,14 +29,14 @@ typedef enum NSplits {
 
 typedef struct PartRefine {
 	float radius;
-	float max_mass;
 	float min_mass;
-	float falloff_grad;
-	float falloff_offset;
+	float falloff_xo;
+	float falloff_xn;
 	int split_ratio;
 	int falloff_flag;
 	short refine_type;
 	short nsplits;
+	int pad;
 } PartRefine;
 
 /* PartRefine->falloff_flag */

@@ -758,7 +758,7 @@ static int split_through_wall_test(ParticleSimulationData *sim, ParticleData *pa
 static void sphclassical_check_refiners(ListBase *refiners, RefinerData* rfd, ParticleData *pa, float offset)
 {
 	SPHRefiner *sref;
-	float vec[3], dist, upper_bound, lower_bound, grad, offs, eps;
+	float vec[3], dist, upper_bound, lower_bound, k, A, eps, sr, ns, x0, xN;
 	int ret = 0;
 
 	if(refiners) for(sref = refiners->first; sref; sref=sref->next) {
@@ -800,12 +800,18 @@ static void sphclassical_check_refiners(ListBase *refiners, RefinerData* rfd, Pa
 		if(ret){
 			sub_v3_v3v3(sref->vec_to_particle, pa->state.co, sref->co);
 			dist = normalize_v3(sref->vec_to_particle);
-			grad = sref->pr->falloff_grad;
-			offs = sref->pr->falloff_offset;
 			eps = 0.1f * sref->pr->min_mass;
 			if (sref->pr->falloff_flag){
-				upper_bound = MIN2(MAX2(sref->pr->min_mass+eps, sref->pr->split_ratio * grad * (dist - offs)), 1.1f);
-				lower_bound = MIN2(MAX2(sref->pr->min_mass-eps, grad * (dist - offset - offs)), 0.9f);
+				x0 = sref->pr->falloff_xo;
+				xN = sref->pr->falloff_xn;
+				sr = (float)sref->pr->split_ratio;
+				ns = (float)sref->pr->nsplits;
+				k = (-ns * log(sr)) / (x0 - xN);
+				A = (exp(-k * x0)) / (pow(sr, ns));
+				offset = (0.25f / k) * log(sr);
+
+				upper_bound = MIN2(MAX2(1.5f*sref->pr->min_mass, 2.f * A * exp(k * dist)), 1.1f);
+				lower_bound = MIN2(MAX2(0.5f*sref->pr->min_mass, 0.5f * A * exp(k * (dist - offset))), 0.9f);
 
 				if (upper_bound < pa->sphmaxmass || lower_bound < pa->sphminmass){
 					pa->sphmaxmass = upper_bound < pa->sphmaxmass ? upper_bound:pa->sphmaxmass;
@@ -839,7 +845,7 @@ static int nearest_split(ParticleSimulationData *sim, SPHRangeData *pfr)
 	ParticleData *pa = pfr->pa, *npa;
 	RefinerData rfd;
 	SPHNeighbor *pfn;
-	float offset = psys->part->fluid->radius;
+	float offset = psys->part->fluid->radius/4.f;
 	float min_dist = 2.f * pfr->h;
 	float dist, vec[3];
 	int index=-1, p;
@@ -891,7 +897,7 @@ void BPH_sph_unsplit_particle(ParticleSimulationData *sim, float cfra)
 		}
 
 		/* Update particle mass limits from refiners */
-		sphclassical_check_refiners(psys->refiners, &rfd, pa, interaction_radius);
+		sphclassical_check_refiners(psys->refiners, &rfd, pa, interaction_radius/4.f);
 
 		if(pa->sphmassfac > pa->sphminmass)
 			continue;
@@ -939,7 +945,7 @@ void BPH_sph_unsplit_particle(ParticleSimulationData *sim, float cfra)
 		pa->sphalpha = pow(fac1 , 1.f/3.f)/h;
 
 		/* -- Kill other particle. */
-		npa->dietime = cfra + 0.001/((float)(psys->part->subframes + 1));
+		npa->dietime = cfra + 0.001f/((float)(psys->part->subframes + 1));
 		npa->alive = PARS_DEAD;
 		psys_deadpars_add(psys->deadpars, index_n);
 	}

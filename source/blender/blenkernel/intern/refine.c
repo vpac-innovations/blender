@@ -50,13 +50,11 @@ PartRefine *object_add_refiner(int type)
 
 	pr->refine_type = type;
 	pr->radius = 0.05f;
-	pr->falloff_grad = 1.f;
-	pr->falloff_offset = 0.f;
+	pr->falloff_xn = 1.f;
+	pr->falloff_xo = 0.f;
 	pr->split_ratio = SPLIT2;
 	pr->nsplits = REFINE_ONCE;
 	pr->falloff_flag = NO_FALLOFF;
-	//pr->max_mass = 11.f / (10.f * pow(pr->split_ratio, pr->nsplits));
-	//pr->min_mass = 1.f / (pow(pr->split_ratio, pr->nsplits));
 
 	return pr;
 }

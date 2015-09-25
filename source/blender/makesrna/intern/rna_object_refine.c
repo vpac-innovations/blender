@@ -270,35 +270,29 @@ static void rna_def_refiner(BlenderRNA *brna)
 	RNA_def_property_ui_text(prop, "Radius", "Radius within which adaptive resolution is active");
 	RNA_def_property_update(prop, 0, "rna_RefinerSettings_update");
 
-	prop = RNA_def_property(srna, "maximum_mass", PROP_FLOAT, PROP_NONE);
-	RNA_def_property_float_sdna(prop, NULL, "max_mass");
-	RNA_def_property_range(prop, 0.0f, 1.f);
-	RNA_def_property_ui_text(prop, "Max mass fac", "Upper limit for particle mass in refiner region");
-	RNA_def_property_update(prop, 0, "rna_RefinerSettings_update");
-
 	prop = RNA_def_property(srna, "minimum_mass", PROP_FLOAT, PROP_NONE);
 	RNA_def_property_float_sdna(prop, NULL, "min_mass");
 	RNA_def_property_range(prop, 0.0f, 1.f);
 	RNA_def_property_ui_text(prop, "Min mass fac", "Lower limit for particle mass in refiner region");
 	RNA_def_property_update(prop, 0, "rna_RefinerSettings_update");
 
-	prop = RNA_def_property(srna, "falloff_gradient", PROP_FLOAT, PROP_NONE);
-	RNA_def_property_float_sdna(prop, NULL, "falloff_grad");
+	prop = RNA_def_property(srna, "falloff_xo", PROP_FLOAT, PROP_NONE);
+	RNA_def_property_float_sdna(prop, NULL, "falloff_xo");
 	RNA_def_property_range(prop, 0.0f, FLT_MAX);
-	RNA_def_property_ui_text(prop, "Falloff gradient", "Gradient of linear falloff function");
+	RNA_def_property_ui_text(prop, "xmin", "Distance from refiner where target particle mass is minimum mass");
 	RNA_def_property_update(prop, 0, "rna_RefinerSettings_update");
 
-	prop = RNA_def_property(srna, "falloff_offset", PROP_FLOAT, PROP_NONE);
-	RNA_def_property_float_sdna(prop, NULL, "falloff_offset");
+	prop = RNA_def_property(srna, "falloff_xn", PROP_FLOAT, PROP_NONE);
+	RNA_def_property_float_sdna(prop, NULL, "falloff_xn");
 	RNA_def_property_range(prop, 0.0f, FLT_MAX);
-	RNA_def_property_ui_text(prop, "Falloff offset", "Offset of linear falloff function");
+	RNA_def_property_ui_text(prop, "xmax", "Distance from refiner where target particle mass is the unrefined particle mass");
 	RNA_def_property_update(prop, 0, "rna_RefinerSettings_update");
 
 	/* Misc?*/
 	prop = RNA_def_property(srna, "use_falloff", PROP_BOOLEAN, PROP_NONE);
 	RNA_def_property_boolean_sdna(prop, NULL, "falloff_flag", NO_FALLOFF);
 	RNA_def_property_ui_text(prop, "Use falloff function",
-	                         "Use falloff function to determine when splitting/merging happens");
+	                         "Use exponential falloff function to determine when splitting/merging happens");
 	//RNA_def_property_update(prop, 0, "rna_Particle_reset");
 }
 

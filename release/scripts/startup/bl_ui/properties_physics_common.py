@@ -330,30 +330,12 @@ def basic_refiner_settings_ui(self, context, refiner):
 
     if refiner.use_falloff:
        split = layout.split()
-       split.prop(refiner, "falloff_gradient")
+       split.prop(refiner, "falloff_xn")
        split = layout.split()
-       split.prop(refiner, "falloff_offset")
+       split.prop(refiner, "falloff_xo")
     else:
        split = layout.split()
        split.prop(refiner, "radius")
-"""
-    col = split.column()
-    col.label(text="Settings:")
 
-    col.prop(refiner, "minimum_mass")
-    col.prop(refiner, "maximum_mass")
-
-    col = split.column()
-    col.label(text="")
-
-    col.prop(refiner, "radius")
-    col.prop(refiner, "falloff_gradient")
-
-    split = layout.split()
-
-    col = split.column()
-
-    col.prop(refiner, "max_mass")
-"""
 if __name__ == "__main__":  # only for live edit.
     bpy.utils.register_module(__name__)
