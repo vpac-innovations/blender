@@ -431,6 +431,44 @@ static void sphclassical_density_accum_cb(void *userdata, int index, float squar
   pfr->params.density += q;
 }
 
+static int collider_check(ListBase *colliders, ParticleData *npa, ParticleData *pa)
+{
+  ColliderCache *coll;
+  BVHTreeFromMesh treeData = {NULL};
+  BVHTreeRayHit hit;
+  Object *current;
+  float ray_start[3], ray_end[3], ray_dir[3], old_dist;
+
+  if(BLI_listbase_is_empty(colliders))
+    return 0;
+
+  copy_v3_v3(ray_start, pa->prev_state.co);
+  copy_v3_v3(ray_end, npa->state.co);
+
+  sub_v3_v3v3(ray_dir, ray_end, ray_start);
+  hit.index = -1;
+  hit.dist = len_v3(ray_dir);
+
+  /* Iterate over colliders and check for intersect */
+  for(coll=colliders->first; coll; coll=coll->next){
+    current = coll->ob;
+    old_dist = hit.dist;
+
+    bvhtree_from_mesh_faces(&treeData, current->derivedFinal, 0.0f, 4, 6);
+
+    /* Ray cast. */
+    BLI_bvhtree_ray_cast(treeData.tree, ray_start, ray_dir, pa->size*pa->sphmassfac, &hit, treeData.raycast_callback, &treeData);
+
+    /* Throw out new hit distance if previous one was shorter. */
+    if(old_dist < hit.dist)
+      hit.dist = old_dist;
+
+  free_bvhtree_from_mesh(&treeData);
+  }
+
+  return hit.index >= 0;
+}
+
 static void sphclassical_neighbour_accum_cb(void *userdata, int index, float squared_dist)
 {
   SPHRangeData *pfr = (SPHRangeData *)userdata;
@@ -452,6 +490,10 @@ static void sphclassical_neighbour_accum_cb(void *userdata, int index, float squ
   }
   rij_h = rij / pfr->h;
   if (rij_h > 2.0f)
+    return;
+
+  /* Exclude particles separated by a collider */
+  if(collider_check(pfr->colliders, npa, pfr->pa))
     return;
 
   pfr->neighbors[pfr->tot_neighbors].index = index;
@@ -498,6 +540,7 @@ static void sphclassical_force_cb(void *sphdata_v, ParticleKey *state, float *fo
 
 	pfr.h = h;
 	pfr.pa = pa;
+	pfr.colliders = sphdata->colliders;
 
 	sph_evaluate_func(NULL, psys, state->co, &pfr, interaction_radius, sphclassical_neighbour_accum_cb);
 
@@ -618,6 +661,8 @@ void psys_sph_init(ParticleSimulationData *sim, SPHData *sphdata)
 		sphdata->hfac = 0.5f;
 	}
 
+	sphdata->colliders = sim->colliders;
+
 	sphdata->init(sphdata);
 }
 
@@ -720,39 +765,39 @@ static void sph_integrate(ParticleSimulationData *sim, ParticleData *pa, float d
 
 static int split_through_wall_test(ParticleSimulationData *sim, ParticleData *pa, BVHTreeRayHit *hit)
 {
-	ColliderCache *coll;
-	ListBase *colliders = sim->colliders;
-	BVHTreeFromMesh treeData = {NULL};
-	Object *current;
-	float ray_start[3], ray_end[3], ray_dir[3], old_dist;
+  ColliderCache *coll;
+  ListBase *colliders = sim->colliders;
+  BVHTreeFromMesh treeData = {NULL};
+  Object *current;
+  float ray_start[3], ray_end[3], ray_dir[3], old_dist;
 
-	if(BLI_listbase_is_empty(colliders))
-		return 0;
+  if(BLI_listbase_is_empty(colliders))
+    return 0;
 
-	copy_v3_v3(ray_start, pa->prev_state.co);
-	copy_v3_v3(ray_end, pa->state.co);
+  copy_v3_v3(ray_start, pa->prev_state.co);
+  copy_v3_v3(ray_end, pa->state.co);
 
-	sub_v3_v3v3(ray_dir, ray_end, ray_start);
-	hit->index = -1;
-	hit->dist = len_v3(ray_dir);
+  sub_v3_v3v3(ray_dir, ray_end, ray_start);
+  hit->index = -1;
+  hit->dist = len_v3(ray_dir);
 
-	/* Iterate over colliders and check for intersect */
-	for(coll=colliders->first; coll; coll=coll->next){
-		current = coll->ob;
-		old_dist = hit->dist;
+  /* Iterate over colliders and check for intersect */
+  for(coll=colliders->first; coll; coll=coll->next){
+    current = coll->ob;
+    old_dist = hit->dist;
 
-		bvhtree_from_mesh_faces(&treeData, current->derivedFinal, 0.0f, 4, 6);
+    bvhtree_from_mesh_faces(&treeData, current->derivedFinal, 0.0f, 4, 6);
 
-		/* Ray cast. */
-		BLI_bvhtree_ray_cast(treeData.tree, ray_start, ray_dir, pa->size*pa->sphmassfac, hit, treeData.raycast_callback, &treeData);
+    /* Ray cast. */
+    BLI_bvhtree_ray_cast(treeData.tree, ray_start, ray_dir, pa->size*pa->sphmassfac, hit, treeData.raycast_callback, &treeData);
 
-		/* Throw out new hit distance if previous one was shorter. */
-		if(old_dist < hit->dist)
-			hit->dist = old_dist;
+    /* Throw out new hit distance if previous one was shorter. */
+    if(old_dist < hit->dist)
+      hit->dist = old_dist;
 
-		free_bvhtree_from_mesh(&treeData);
-	}
-	return hit->index >= 0;
+  free_bvhtree_from_mesh(&treeData);
+  }
+  return hit->index >= 0;
 }
 
 static void sphclassical_check_refiners(ListBase *refiners, RefinerData* rfd, ParticleData *pa, float offset)

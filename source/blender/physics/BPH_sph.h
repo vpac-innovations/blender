@@ -40,7 +40,7 @@ struct ParticleSystem;
 struct ParticleKey;
 struct ParticleSimulationData;
 struct ParticleData;
-//struct SPHData;
+struct ListBase;
 
 #define SPH_NEIGHBORS 512
 typedef struct SPHNeighbor {
@@ -63,6 +63,7 @@ typedef struct SPHRangeData {
 
   ParticleSystem *npsys;
   ParticleData *pa;
+  ListBase *colliders;
 
   float h;
   float mass;
@@ -73,6 +74,7 @@ typedef struct SPHRangeData {
 typedef struct SPHData {
   ParticleSystem *psys[10];
   ParticleData *pa;
+  ListBase *colliders;
   float mass;
   struct EdgeHash *eh;
   float *gravity;
