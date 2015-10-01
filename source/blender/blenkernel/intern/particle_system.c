@@ -2276,7 +2276,7 @@ void collision_check(ParticleSimulationData *sim, int p, float dfra, float cfra)
 	copy_v3_v3(col.ve2, pa->state.vel);
 	col.f = 0.0f;
 
-	col.radius = ((part->flag & PART_SIZE_DEFL) || (part->phystype == PART_PHYS_BOIDS)) ? pa->size * pa->sphmassfac : COLLISION_MIN_RADIUS;
+	col.radius = ((part->flag & PART_SIZE_DEFL) || (part->phystype == PART_PHYS_BOIDS)) ? pa->size : COLLISION_MIN_RADIUS;
 
 	/* override for boids */
 	if (part->phystype == PART_PHYS_BOIDS && part->boids->options & BOID_ALLOW_LAND) {
@@ -2825,7 +2825,7 @@ static void dynamics_step(ParticleSimulationData *sim, float cfra)
 
 		psys_get_texture(sim, pa, &ptex, PAMAP_SIZE, cfra);
 
-		pa->size = part->size*ptex.size;
+		pa->size = part->size*ptex.size * pow(pa->sphmassfac, 1.f / 3.f);
 		if (part->randsize > 0.0f)
 			pa->size *= 1.0f - part->randsize * psys_frand(psys, p + 1);
 
@@ -2976,7 +2976,7 @@ static void cached_step(ParticleSimulationData *sim, float cfra)
 
 	LOOP_PARTICLES {
 		psys_get_texture(sim, pa, &ptex, PAMAP_SIZE, cfra);
-		pa->size = part->size*ptex.size;
+		pa->size = part->size*ptex.size * pow(pa->sphmassfac, 1.f / 3.f);
 		if (part->randsize > 0.0f)
 			pa->size *= 1.0f - part->randsize * psys_frand(psys, p + 1);
 
@@ -3533,7 +3533,7 @@ void particle_system_update(Scene *scene, Object *ob, ParticleSystem *psys)
 					}
 
 					LOOP_EXISTING_PARTICLES {
-						pa->size = part->size;
+						pa->size = part->size * pow(pa->sphmassfac, 1.f / 3.f);
 						if (part->randsize > 0.0f)
 							pa->size *= 1.0f - part->randsize * psys_frand(psys, p + 1);
 

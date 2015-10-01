@@ -744,7 +744,7 @@ static int split_through_wall_test(ParticleSimulationData *sim, ParticleData *pa
 		bvhtree_from_mesh_faces(&treeData, current->derivedFinal, 0.0f, 4, 6);
 
 		/* Ray cast. */
-		BLI_bvhtree_ray_cast(treeData.tree, ray_start, ray_dir, pa->size*pa->sphmassfac, hit, treeData.raycast_callback, &treeData);
+		BLI_bvhtree_ray_cast(treeData.tree, ray_start, ray_dir, pa->size, hit, treeData.raycast_callback, &treeData);
 
 		/* Throw out new hit distance if previous one was shorter. */
 		if(old_dist < hit->dist)
@@ -759,7 +759,7 @@ static void sphclassical_check_refiners(ListBase *refiners, RefinerData* rfd, Pa
 {
 	SPHRefiner *sref;
 	float vec[3], dist, upper_bound, lower_bound, k, A, eps, sr, ns, x0, xN;
-	int ret = 0;
+	int ret = 0, num_verts, p;
 
 	if(refiners) for(sref = refiners->first; sref; sref=sref->next) {
 		switch(sref->pr->refine_type) {
@@ -791,8 +791,27 @@ static void sphclassical_check_refiners(ListBase *refiners, RefinerData* rfd, Pa
 			}
 			case REFINE_POINTS:
 			{
-				/* Vertex refiner, TODO: implement. */
-				ret = 0;
+				if(sref->ob->derivedFinal) {
+					DerivedMesh *dm = sref->ob->derivedFinal;
+					float v2p[3], co[3], dist_old, dist_new;
+					num_verts = dm ? dm->numVertData : 1;
+					dist_old = FLT_MAX;
+
+					for(p = 0; p < num_verts; p++){
+						dm->getVertCo(dm, p, co);
+						mul_m4_v3(sref->ob->obmat, co);
+
+						sub_v3_v3v3(v2p, pa->state.co, co);
+						dist_new = normalize_v3(v2p);
+
+						if(dist_new < dist_old){
+							dist_old = dist_new;
+							copy_v3_v3(sref->co, co);
+							copy_v3_v3(sref->vec_to_particle, v2p);
+							ret = 1;
+						}
+					}
+				}
 				break;
 			}
 		}
@@ -845,7 +864,7 @@ static int nearest_split(ParticleSimulationData *sim, SPHRangeData *pfr)
 	ParticleData *pa = pfr->pa, *npa;
 	RefinerData rfd;
 	SPHNeighbor *pfn;
-	float offset = psys->part->fluid->radius/4.f;
+	float offset = psys->part->fluid->radius;
 	float min_dist = 2.f * pfr->h;
 	float dist, vec[3];
 	int index=-1, p;
@@ -885,6 +904,7 @@ void BPH_sph_unsplit_particle(ParticleSimulationData *sim, float cfra)
 	float interaction_radius = psys->part->fluid->radius;
 	float h = interaction_radius * 0.5f;
 	float mass = psys->part->mass;
+	float size = psys->part->size;
 	float fac1, fac2, wma, wmb, rij_h, old_massfac, vec[3], old_co[3], old_vel[3];
 	int index_n;
 	PARTICLE_P;
@@ -897,7 +917,7 @@ void BPH_sph_unsplit_particle(ParticleSimulationData *sim, float cfra)
 		}
 
 		/* Update particle mass limits from refiners */
-		sphclassical_check_refiners(psys->refiners, &rfd, pa, interaction_radius/4.f);
+		sphclassical_check_refiners(psys->refiners, &rfd, pa, interaction_radius);
 
 		if(pa->sphmassfac > pa->sphminmass)
 			continue;
@@ -922,6 +942,7 @@ void BPH_sph_unsplit_particle(ParticleSimulationData *sim, float cfra)
 		/* Merge particles, kill unused particles*/
 		/* -- Set massfac for merged particle. */
 		pa->sphmassfac += npa->sphmassfac;
+		pa->size = size * pa->sphmassfac;
 
 		fac1 = (npa->sphmassfac)/(pa->sphmassfac);
 		fac2 = old_massfac/(pa->sphmassfac);
@@ -1117,7 +1138,7 @@ static void split_positions9(ParticleSimulationData *sim, ParticleData *pa, Refi
 			if(sim->colliders){
 				i = split_through_wall_test(sim, &test_pa, &hit);
 				if(i)
-					factor *= (hit.dist - pa->size * pa->sphmassfac);
+					factor *= (hit.dist - pa->size);
 			}
 
 			madd_v3_v3fl(pa->state.co, base_x, factor);
@@ -1136,7 +1157,7 @@ static void split_positions9(ParticleSimulationData *sim, ParticleData *pa, Refi
 			if(sim->colliders){
 				i = split_through_wall_test(sim, &test_pa, &hit);
 				if(i)
-					factor *= (hit.dist - pa->size * pa->sphmassfac);
+					factor *= (hit.dist - pa->size);
 			}
 
 			madd_v3_v3fl(pa->state.co, base_x, factor);
@@ -1154,7 +1175,7 @@ static void split_positions9(ParticleSimulationData *sim, ParticleData *pa, Refi
 			if(sim->colliders){
 				i = split_through_wall_test(sim, &test_pa, &hit);
 				if(i)
-					factor *= (hit.dist - pa->size * pa->sphmassfac);
+					factor *= (hit.dist - pa->size);
 			}
 
 			madd_v3_v3fl(pa->state.co, base_x, factor);
@@ -1172,7 +1193,7 @@ static void split_positions9(ParticleSimulationData *sim, ParticleData *pa, Refi
 			if(sim->colliders){
 				i = split_through_wall_test(sim, &test_pa, &hit);
 				if(i)
-					factor *= (hit.dist - pa->size * pa->sphmassfac);
+					factor *= (hit.dist - pa->size);
 			}
 
 			madd_v3_v3fl(pa->state.co, base_x, -factor);
@@ -1190,7 +1211,7 @@ static void split_positions9(ParticleSimulationData *sim, ParticleData *pa, Refi
 			if(sim->colliders){
 				i = split_through_wall_test(sim, &test_pa, &hit);
 				if(i)
-					factor *= (hit.dist - pa->size * pa->sphmassfac);
+					factor *= (hit.dist - pa->size);
 			}
 
 			madd_v3_v3fl(pa->state.co, base_x, -factor);
@@ -1208,7 +1229,7 @@ static void split_positions9(ParticleSimulationData *sim, ParticleData *pa, Refi
 			if(sim->colliders){
 				i = split_through_wall_test(sim, &test_pa, &hit);
 				if(i)
-					factor *= (hit.dist - pa->size * pa->sphmassfac);
+					factor *= (hit.dist - pa->size);
 			}
 
 			madd_v3_v3fl(pa->state.co, base_x, -factor);
@@ -1226,7 +1247,7 @@ static void split_positions9(ParticleSimulationData *sim, ParticleData *pa, Refi
 			if(sim->colliders){
 				i = split_through_wall_test(sim, &test_pa, &hit);
 				if(i)
-					factor *= (hit.dist - pa->size * pa->sphmassfac);
+					factor *= (hit.dist - pa->size);
 			}
 
 			madd_v3_v3fl(pa->state.co, base_x, factor);
@@ -1245,7 +1266,7 @@ static void split_positions9(ParticleSimulationData *sim, ParticleData *pa, Refi
 			if(sim->colliders){
 				i = split_through_wall_test(sim, &test_pa, &hit);
 				if(i)
-					factor *= (hit.dist - pa->size * pa->sphmassfac);
+					factor *= (hit.dist - pa->size);
 			}
 
 			madd_v3_v3fl(pa->state.co, base_x, -factor);
@@ -1328,6 +1349,7 @@ static void sph_split2(ParticleSimulationData *sim, RefinerData *rfd, int index,
 	ParticleSystem *psys = sim->psys;
 	ParticleSettings *part = psys->part;
 	ParticleData *pa, *new_pa;
+	float size = part->size;
 	int oldtotpart = psys->totpart;
 	int newtotpart;
 	int newparticles = 1 - psys->deadpars->size;
@@ -1349,6 +1371,7 @@ static void sph_split2(ParticleSimulationData *sim, RefinerData *rfd, int index,
 			split_positions2(sim, new_pa, rfd, i+1);
 			new_pa->sphalpha *= pow(1.f / 2.f, 1.f / 3.f);
 			new_pa->sphmassfac *= 1.f / 2.f;
+			new_pa->size = size * pow(new_pa->sphmassfac, 1.f / 3.f);
 
 			/* Set state variables. Offset birth time to avoid particle reset. */
 			new_pa->adptv = PARS_UNADAPTABLE;
@@ -1368,6 +1391,7 @@ static void sph_split2(ParticleSimulationData *sim, RefinerData *rfd, int index,
 		split_positions2(sim, new_pa, rfd, newparticles + i + 1);
 		new_pa->sphalpha *= pow(1.f / 2.f, 1.f / 3.f);
 		new_pa->sphmassfac *= 1.f / 2.f;
+		new_pa->size = size * pow(new_pa->sphmassfac, 1.f / 3.f);
 
 		/* Set state variables. Offset to avoid particle reset. */
 		new_pa->adptv = PARS_UNADAPTABLE;
@@ -1379,6 +1403,7 @@ static void sph_split2(ParticleSimulationData *sim, RefinerData *rfd, int index,
 	split_positions2(sim, pa, rfd, 2);
 	pa->sphalpha *= pow(1.f / 2.f, 1.f / 3.f);
 	pa->sphmassfac *= 1.f / 2.f;
+	pa->size = size * pow(pa->sphmassfac, 1.f / 3.f);
 
 	pa->adptv = PARS_UNADAPTABLE;
 
@@ -1390,6 +1415,7 @@ static void sph_split3(ParticleSimulationData *sim, RefinerData *rfd, int index,
 	ParticleSystem *psys = sim->psys;
 	ParticleSettings *part = psys->part;
 	ParticleData *pa, *new_pa;
+	float size = part->size;
 	int oldtotpart = psys->totpart;
 	int newtotpart;
 	int newparticles = 2 - psys->deadpars->size;
@@ -1411,6 +1437,7 @@ static void sph_split3(ParticleSimulationData *sim, RefinerData *rfd, int index,
 			split_positions3(sim, new_pa, rfd, i+1);
 			new_pa->sphalpha *= pow(1.f / 3.f, 1.f / 3.f);
 			new_pa->sphmassfac *= 1.f / 3.f;
+			new_pa->size = size * pow(new_pa->sphmassfac, 1.f / 3.f);
 
 			/* Set state variables. Offset birth time to avoid particle reset. */
 			new_pa->adptv = PARS_UNADAPTABLE;
@@ -1430,6 +1457,7 @@ static void sph_split3(ParticleSimulationData *sim, RefinerData *rfd, int index,
 		split_positions3(sim, new_pa, rfd, newparticles + i + 1);
 		new_pa->sphalpha *= pow(1.f / 3.f, 1.f / 3.f);
 		new_pa->sphmassfac *= 1.f / 3.f;
+		new_pa->size = size * pow(new_pa->sphmassfac, 1.f / 3.f);
 
 		/* Set state variables. Offset to avoid particle reset. */
 		new_pa->adptv = PARS_UNADAPTABLE;
@@ -1441,6 +1469,7 @@ static void sph_split3(ParticleSimulationData *sim, RefinerData *rfd, int index,
 	split_positions3(sim, pa, rfd, 3);
 	pa->sphalpha *= pow(1.f / 3.f, 1.f / 3.f);
 	pa->sphmassfac *= 1.f / 3.f;
+	pa->size = size * pow(pa->sphmassfac, 1.f / 3.f);
 
 	pa->adptv = PARS_UNADAPTABLE;
 
@@ -1452,6 +1481,7 @@ static void sph_split9(ParticleSimulationData *sim, RefinerData *rfd, int index,
 	ParticleSystem *psys = sim->psys;
 	ParticleSettings *part = psys->part;
 	ParticleData *pa, *new_pa;
+	float size = part->size;
 	int oldtotpart = psys->totpart;
 	int newtotpart;
 	int newparticles = 8 - psys->deadpars->size;
@@ -1472,6 +1502,7 @@ static void sph_split9(ParticleSimulationData *sim, RefinerData *rfd, int index,
 
 			/* Set position, mass and smoothing length for new particle. */
 			new_pa->sphmassfac *= 0.1f;
+			new_pa->size = size * pow(new_pa->sphmassfac, 1.f / 3.f);
 			split_positions9(sim, new_pa, rfd, i+1);
 			new_pa->sphalpha *= 0.75f;
 
@@ -1493,6 +1524,7 @@ static void sph_split9(ParticleSimulationData *sim, RefinerData *rfd, int index,
 
 		/* Set position, mass and smoothing length for new particle. */
 		new_pa->sphmassfac *= 0.1f;
+		new_pa->size = size * pow(new_pa->sphmassfac, 1.f / 3.f);
 		split_positions9(sim, new_pa, rfd, newparticles+i+1);
 		new_pa->sphalpha *= 0.75f;
 
@@ -1505,6 +1537,7 @@ static void sph_split9(ParticleSimulationData *sim, RefinerData *rfd, int index,
 	/* Set mass and smoothing length for new particle. Tag as unadaptable. */
 	pa->sphalpha *= 0.75f;
 	pa->sphmassfac *= 0.2f;
+	pa->size = size * pow(new_pa->sphmassfac, 1.f / 3.f);
 	pa->adptv = PARS_UNADAPTABLE;
 
 	psys->deadpars->size -= 8 - newparticles;
