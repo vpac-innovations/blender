@@ -1313,7 +1313,9 @@ void BPH_sph_adptv_res_init(ParticleSimulationData *sim, ParticleSystem *psys)
 			num_faces = dm->getNumTessFaces(dm);
 			num_edges = dm->getNumEdges(dm);
 
-			MEM_freeN(sref->surmd->bvhtree);
+			if(sref->surmd->bvhtree)
+				MEM_freeN(sref->surmd->bvhtree);
+
 			treeData = MEM_callocN(sizeof(BVHTreeFromMesh), "bvh tree");
 
 			if(num_faces){
