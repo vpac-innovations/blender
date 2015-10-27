@@ -130,7 +130,7 @@ static EnumPropertyItem *rna_Refiner_type_itemf(bContext *UNUSED(C), PointerRNA 
 	if (ELEM(ob->type, OB_EMPTY))
 		return point_type_items;
 
-	if (ELEM(ob->type, OB_MESH)){
+	if (ELEM(ob->type, OB_MESH) && ob->derivedFinal){
 		dm = ob->derivedFinal;
 		if (dm->getNumTessFaces(dm))
 			return surface_type_items;
@@ -292,7 +292,7 @@ static void rna_def_refiner(BlenderRNA *brna)
 	RNA_def_property_boolean_sdna(prop, NULL, "falloff_flag", NO_FALLOFF);
 	RNA_def_property_ui_text(prop, "Use falloff function",
 	                         "Use exponential falloff function to determine when splitting/merging happens");
-	//RNA_def_property_update(prop, 0, "rna_Particle_reset");
+	RNA_def_property_update(prop, 0, "rna_RefinerSettings_update");
 }
 
 void RNA_def_object_refine(BlenderRNA *brna)
