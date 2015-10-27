@@ -116,7 +116,6 @@ static EnumPropertyItem surface_type_items[] = {
 static EnumPropertyItem volume_split_items[] = {
     {REFINE_ONCE, "ONCE", 0, "1", "Allow particles to be split once."},
     {REFINE_TWICE, "TWICE", 0, "2", "Allow particles to be split twice"},
-    {REFINE_THREE_TIMES, "THREE_TIMES", 0, "3", "Allow particles to be split three times"},
     {0, NULL, 0, NULL, NULL}
 };
 
