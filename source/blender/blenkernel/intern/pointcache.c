@@ -301,6 +301,14 @@ static void ptcache_particle_read(int index, void *psys_v, void **data, float cf
 
 	BKE_ptcache_make_particle_key(&pa->state, 0, data, cfra);
 
+	if (data[BPHYS_DATA_TIMES]) {
+		float times[3];
+		PTCACHE_DATA_TO(data, BPHYS_DATA_TIMES, 0, &times);
+		pa->time = times[0];
+		pa->dietime = times[1];
+		pa->lifetime = times[2];
+	}
+
 	/* set frames cached before birth to birth time */
 	if (cfra < pa->time)
 		pa->state.time = pa->time;
@@ -309,14 +317,6 @@ static void ptcache_particle_read(int index, void *psys_v, void **data, float cf
 
 	if (data[BPHYS_DATA_SIZE]) {
 		PTCACHE_DATA_TO(data, BPHYS_DATA_SIZE, 0, &pa->size);
-	}
-	
-	if (data[BPHYS_DATA_TIMES]) {
-		float times[3];
-		PTCACHE_DATA_TO(data, BPHYS_DATA_TIMES, 0, &times);
-		pa->time = times[0];
-		pa->dietime = times[1];
-		pa->lifetime = times[2];
 	}
 
 	if (boid) {
