@@ -366,6 +366,7 @@ void integrate_particle(struct ParticleSettings *part, struct ParticleData *pa, 
 void basic_integrate(ParticleSimulationData *sim, int p, float dfra, float cfra);
 void basic_rotate(ParticleSettings *part, ParticleData *pa, float dfra, float timestep);
 void collision_check(ParticleSimulationData *sim, int p, float dfra, float cfra);
+int collision_detect(ParticleData *pa, ParticleCollision *col, struct BVHTreeRayHit *hit, ListBase *colliders);
 
 /* ----------- functions needed only inside particlesystem ------------ */
 /* particle.c */

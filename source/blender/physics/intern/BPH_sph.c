@@ -718,6 +718,43 @@ static void sph_integrate(ParticleSimulationData *sim, ParticleData *pa, float d
   integrate_particle(part, pa, dtime, effector_acceleration, sphdata->force_cb, sphdata);
 }
 
+#define COLLISION_MIN_RADIUS 0.001f
+
+static int collider_test(ParticleSimulationData *sim, ParticleData *pa, BVHTreeRayHit *hit, float cfra)
+{
+	ParticleSettings *part = sim->psys->part;
+	ParticleCollision col;
+
+	float dfra = pa->state.time;
+	float timestep = psys_get_timestep(sim);
+
+	memset(&col, 0, sizeof(ParticleCollision));
+
+	col.total_time = timestep * dfra;
+	col.inv_total_time = 1.0f/col.total_time;
+	col.inv_timestep = 1.0f/timestep;
+
+	col.cfra = cfra;
+	col.old_cfra = sim->psys->cfra;
+
+	/* get acceleration (from gravity, forcefields etc. to be re-applied in collision response) */
+	sub_v3_v3v3(col.acc, pa->state.vel, pa->prev_state.vel);
+	mul_v3_fl(col.acc, 1.f/col.total_time);
+
+	/* set values for first iteration */
+	copy_v3_v3(col.co1, pa->prev_state.co);
+	copy_v3_v3(col.co2, pa->state.co);
+	copy_v3_v3(col.ve1, pa->prev_state.vel);
+	copy_v3_v3(col.ve2, pa->state.vel);
+	col.f = 0.0f;
+
+	col.radius = (part->flag & PART_SIZE_DEFL) ? pa->size : COLLISION_MIN_RADIUS;
+
+	collision_detect(pa, &col, hit, sim->colliders);
+
+	return hit->index >= 0;
+}
+
 static int split_through_wall_test(ParticleSimulationData *sim, ParticleData *pa, BVHTreeRayHit *hit)
 {
 	ColliderCache *coll;
@@ -1026,7 +1063,7 @@ static void split_positions2(ParticleSimulationData *sim, ParticleData *pa, Refi
 	}
 }
 
-static void split_positions3(ParticleSimulationData *sim, ParticleData *pa, RefinerData *rfd, int num)
+static void split_positions3(ParticleSimulationData *sim, ParticleData *pa, RefinerData *rfd, float cfra, int num)
 {
 	ParticleData test_pa;
 	BVHTreeRayHit hit;
@@ -1061,7 +1098,7 @@ static void split_positions3(ParticleSimulationData *sim, ParticleData *pa, Refi
 			madd_v3_v3fl(test_pa.state.co, base_y, -factor1 * factor2 * eps);
 
 			if(sim->colliders){
-				i = split_through_wall_test(sim, &test_pa, &hit);
+				i = collider_test(sim, &test_pa, &hit, cfra);
 				if(i)
 					factor3 = (hit.dist - 0.5f * eps);
 			}
@@ -1077,7 +1114,7 @@ static void split_positions3(ParticleSimulationData *sim, ParticleData *pa, Refi
 			madd_v3_v3fl(test_pa.state.co, base_y, -factor1 * factor2 * eps);
 
 			if(sim->colliders){
-				i = split_through_wall_test(sim, &test_pa, &hit);
+				i = collider_test(sim, &test_pa, &hit, cfra);
 				if(i)
 					factor3 = (hit.dist - 0.5f * eps);
 			}
@@ -1092,7 +1129,7 @@ static void split_positions3(ParticleSimulationData *sim, ParticleData *pa, Refi
 			madd_v3_v3fl(test_pa.state.co, base_y, 2.f * factor1 * factor2 * eps);
 
 			if(sim->colliders){
-				i = split_through_wall_test(sim, &test_pa, &hit);
+				i = collider_test(sim, &test_pa, &hit, cfra);
 				if(i)
 					factor3 = (hit.dist - 0.5f * eps);
 			}
@@ -1105,7 +1142,7 @@ static void split_positions3(ParticleSimulationData *sim, ParticleData *pa, Refi
 	}
 }
 
-static void split_positions9(ParticleSimulationData *sim, ParticleData *pa, RefinerData *rfd, int num)
+static void split_positions9(ParticleSimulationData *sim, ParticleData *pa, RefinerData *rfd, float cfra, int num)
 {
 	ParticleData test_pa;
 	BVHTreeRayHit hit;
@@ -1136,7 +1173,7 @@ static void split_positions9(ParticleSimulationData *sim, ParticleData *pa, Refi
 			madd_v3_v3fl(test_pa.state.co, rfd->v2p, factor);
 
 			if(sim->colliders){
-				i = split_through_wall_test(sim, &test_pa, &hit);
+				i = collider_test(sim, &test_pa, &hit, cfra);
 				if(i)
 					factor *= (hit.dist - pa->size);
 			}
@@ -1155,7 +1192,7 @@ static void split_positions9(ParticleSimulationData *sim, ParticleData *pa, Refi
 			madd_v3_v3fl(test_pa.state.co, rfd->v2p, -factor);
 
 			if(sim->colliders){
-				i = split_through_wall_test(sim, &test_pa, &hit);
+				i = collider_test(sim, &test_pa, &hit, cfra);
 				if(i)
 					factor *= (hit.dist - pa->size);
 			}
@@ -1173,7 +1210,7 @@ static void split_positions9(ParticleSimulationData *sim, ParticleData *pa, Refi
 			madd_v3_v3fl(test_pa.state.co, rfd->v2p, -factor);
 
 			if(sim->colliders){
-				i = split_through_wall_test(sim, &test_pa, &hit);
+				i = collider_test(sim, &test_pa, &hit, cfra);
 				if(i)
 					factor *= (hit.dist - pa->size);
 			}
@@ -1191,7 +1228,7 @@ static void split_positions9(ParticleSimulationData *sim, ParticleData *pa, Refi
 			madd_v3_v3fl(test_pa.state.co, rfd->v2p, -factor);
 
 			if(sim->colliders){
-				i = split_through_wall_test(sim, &test_pa, &hit);
+				i = collider_test(sim, &test_pa, &hit, cfra);
 				if(i)
 					factor *= (hit.dist - pa->size);
 			}
@@ -1209,7 +1246,7 @@ static void split_positions9(ParticleSimulationData *sim, ParticleData *pa, Refi
 			madd_v3_v3fl(test_pa.state.co, rfd->v2p, factor);
 
 			if(sim->colliders){
-				i = split_through_wall_test(sim, &test_pa, &hit);
+				i = collider_test(sim, &test_pa, &hit, cfra);
 				if(i)
 					factor *= (hit.dist - pa->size);
 			}
@@ -1227,7 +1264,7 @@ static void split_positions9(ParticleSimulationData *sim, ParticleData *pa, Refi
 			madd_v3_v3fl(test_pa.state.co, rfd->v2p, factor);
 
 			if(sim->colliders){
-				i = split_through_wall_test(sim, &test_pa, &hit);
+				i = collider_test(sim, &test_pa, &hit, cfra);
 				if(i)
 					factor *= (hit.dist - pa->size);
 			}
@@ -1245,7 +1282,7 @@ static void split_positions9(ParticleSimulationData *sim, ParticleData *pa, Refi
 			madd_v3_v3fl(test_pa.state.co, rfd->v2p, factor);
 
 			if(sim->colliders){
-				i = split_through_wall_test(sim, &test_pa, &hit);
+				i = collider_test(sim, &test_pa, &hit, cfra);
 				if(i)
 					factor *= (hit.dist - pa->size);
 			}
@@ -1264,7 +1301,7 @@ static void split_positions9(ParticleSimulationData *sim, ParticleData *pa, Refi
 			madd_v3_v3fl(test_pa.state.co, rfd->v2p, -factor);
 
 			if(sim->colliders){
-				i = split_through_wall_test(sim, &test_pa, &hit);
+				i = collider_test(sim, &test_pa, &hit, cfra);
 				if(i)
 					factor *= (hit.dist - pa->size);
 			}
@@ -1436,7 +1473,7 @@ static void sph_split3(ParticleSimulationData *sim, RefinerData *rfd, int index,
 			new_pa = psys->particles + oldtotpart + i;
 			memcpy(new_pa, pa, sizeof(ParticleData));
 
-			split_positions3(sim, new_pa, rfd, i+1);
+			split_positions3(sim, new_pa, rfd, cfra, i+1);
 			new_pa->sphalpha *= pow(1.f / 3.f, 1.f / 3.f);
 			new_pa->sphmassfac *= 1.f / 3.f;
 			new_pa->size = size * pow(new_pa->sphmassfac, 1.f / 3.f);
@@ -1456,7 +1493,7 @@ static void sph_split3(ParticleSimulationData *sim, RefinerData *rfd, int index,
 		new_pa = psys->particles + psys->deadpars->data[psys->deadpars->size - 1 - i];
 		memcpy(new_pa, pa, sizeof(ParticleData));
 
-		split_positions3(sim, new_pa, rfd, newparticles + i + 1);
+		split_positions3(sim, new_pa, rfd, cfra, newparticles + i + 1);
 		new_pa->sphalpha *= pow(1.f / 3.f, 1.f / 3.f);
 		new_pa->sphmassfac *= 1.f / 3.f;
 		new_pa->size = size * pow(new_pa->sphmassfac, 1.f / 3.f);
@@ -1468,7 +1505,7 @@ static void sph_split3(ParticleSimulationData *sim, RefinerData *rfd, int index,
 	}
 
 	/* Move original particle to new position. */
-	split_positions3(sim, pa, rfd, 3);
+	split_positions3(sim, pa, rfd, cfra, 3);
 	pa->sphalpha *= pow(1.f / 3.f, 1.f / 3.f);
 	pa->sphmassfac *= 1.f / 3.f;
 	pa->size = size * pow(pa->sphmassfac, 1.f / 3.f);
@@ -1505,7 +1542,7 @@ static void sph_split9(ParticleSimulationData *sim, RefinerData *rfd, int index,
 			/* Set position, mass and smoothing length for new particle. */
 			new_pa->sphmassfac *= 0.1f;
 			new_pa->size = size * pow(new_pa->sphmassfac, 1.f / 3.f);
-			split_positions9(sim, new_pa, rfd, i+1);
+			split_positions9(sim, new_pa, rfd, cfra, i+1);
 			new_pa->sphalpha *= 0.75f;
 
 			/* Set state variables. Offset birth time to avoid particle reset. */
@@ -1527,7 +1564,7 @@ static void sph_split9(ParticleSimulationData *sim, RefinerData *rfd, int index,
 		/* Set position, mass and smoothing length for new particle. */
 		new_pa->sphmassfac *= 0.1f;
 		new_pa->size = size * pow(new_pa->sphmassfac, 1.f / 3.f);
-		split_positions9(sim, new_pa, rfd, newparticles+i+1);
+		split_positions9(sim, new_pa, rfd, cfra, newparticles+i+1);
 		new_pa->sphalpha *= 0.75f;
 
 		/* Set state variables. Offset birth time to avoid particle reset. */
