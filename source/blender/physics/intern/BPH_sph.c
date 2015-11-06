@@ -1009,7 +1009,7 @@ void BPH_sph_unsplit_particle(ParticleSimulationData *sim, float cfra)
 	}
 }
 
-static void split_positions2(ParticleSimulationData *sim, ParticleData *pa, RefinerData *rfd, int num)
+static void split_positions2(ParticleSimulationData *sim, ParticleData *pa, RefinerData *rfd, float cfra, int num)
 {
 	ParticleData test_pa;
 	BVHTreeRayHit hit;
@@ -1037,7 +1037,7 @@ static void split_positions2(ParticleSimulationData *sim, ParticleData *pa, Refi
 			madd_v3_v3fl(test_pa.state.co, basis, factor1 * eps);
 
 			if(sim->colliders){
-				i = split_through_wall_test(sim, &test_pa, &hit);
+				i = collider_test(sim, &test_pa, &hit, cfra);
 				if(i)
 					factor2 = (hit.dist - 0.5f * eps);
 			}
@@ -1050,7 +1050,7 @@ static void split_positions2(ParticleSimulationData *sim, ParticleData *pa, Refi
 			madd_v3_v3fl(test_pa.state.co, basis, -factor1 * eps);
 
 			if(sim->colliders){
-				i = split_through_wall_test(sim, &test_pa, &hit);
+				i = collider_test(sim, &test_pa, &hit, cfra);
 				if(i)
 					factor2 = (hit.dist - 0.5f * eps);
 			}
@@ -1407,7 +1407,7 @@ static void sph_split2(ParticleSimulationData *sim, RefinerData *rfd, int index,
 			new_pa = psys->particles + oldtotpart + i;
 			memcpy(new_pa, pa, sizeof(ParticleData));
 
-			split_positions2(sim, new_pa, rfd, i+1);
+			split_positions2(sim, new_pa, rfd, cfra, i+1);
 			new_pa->sphalpha *= pow(1.f / 2.f, 1.f / 3.f);
 			new_pa->sphmassfac *= 1.f / 2.f;
 			new_pa->size = size * pow(new_pa->sphmassfac, 1.f / 3.f);
@@ -1427,7 +1427,7 @@ static void sph_split2(ParticleSimulationData *sim, RefinerData *rfd, int index,
 		new_pa = psys->particles + psys->deadpars->data[psys->deadpars->size - 1 - i];
 		memcpy(new_pa, pa, sizeof(ParticleData));
 
-		split_positions2(sim, new_pa, rfd, newparticles + i + 1);
+		split_positions2(sim, new_pa, rfd, cfra, newparticles + i + 1);
 		new_pa->sphalpha *= pow(1.f / 2.f, 1.f / 3.f);
 		new_pa->sphmassfac *= 1.f / 2.f;
 		new_pa->size = size * pow(new_pa->sphmassfac, 1.f / 3.f);
@@ -1439,7 +1439,7 @@ static void sph_split2(ParticleSimulationData *sim, RefinerData *rfd, int index,
 	}
 
 	/* Move original particle to new position. */
-	split_positions2(sim, pa, rfd, 2);
+	split_positions2(sim, pa, rfd, cfra, 2);
 	pa->sphalpha *= pow(1.f / 2.f, 1.f / 3.f);
 	pa->sphmassfac *= 1.f / 2.f;
 	pa->size = size * pow(pa->sphmassfac, 1.f / 3.f);
