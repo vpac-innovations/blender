@@ -819,7 +819,7 @@ static void sphclassical_check_refiners(ListBase *refiners, RefinerData* rfd, Pa
 		if(ret){
 			sub_v3_v3v3(sref->vec_to_particle, pa->state.co, sref->co);
 			dist = normalize_v3(sref->vec_to_particle);
-			eps = 0.1f * sref->pr->min_mass;
+			eps = (sref->pr->split_ratio == SPLIT9) ? 0.51f * sref->pr->min_mass:0.1f * sref->pr->min_mass;
 			if (sref->pr->falloff_flag){
 				x0 = sref->pr->falloff_xo;
 				xN = sref->pr->falloff_xn;

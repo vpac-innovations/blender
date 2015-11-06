@@ -139,6 +139,7 @@ typedef struct SPHFluidSettings {
 	float viscosity_omega, viscosity_beta;
 	float stiffness_k, stiffness_knear, rest_density;
 	float buoyancy;
+	float adptv_start, adptv_end, adptv_scale;
 	int flag, spring_frames;
 	short solver;
 	short pad[3];
@@ -573,10 +574,6 @@ typedef enum eParticleChildFlag {
 #define PARS_UNBORN			2
 #define PARS_ALIVE			3
 #define PARS_DYING			4
-
-/* pars->split*/
-#define PARS_SPLIT			1
-#define PARS_UNSPLIT		2
 
 /* pars->adpt */
 #define PARS_ADAPTABLE		1

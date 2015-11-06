@@ -1020,6 +1020,32 @@ static char *rna_SPHFluidSettings_path(PointerRNA *ptr)
 	return NULL;
 }
 
+static void rna_SPHFluidSettings_adptv_start_set(struct PointerRNA *ptr, float value)
+{
+	SPHFluidSettings *fluid = (SPHFluidSettings *)ptr->data;
+
+	/* check for clipping */
+	if (value > fluid->adptv_end)
+		value = fluid->adptv_end;
+
+	/*else  */
+	if (value < MINAFRAMEF)
+		value = MINAFRAMEF;
+
+	fluid->adptv_start = value;
+}
+
+static void rna_SPHFluidSettings_end_set(struct PointerRNA *ptr, float value)
+{
+	SPHFluidSettings *fluid = (SPHFluidSettings *)ptr->data;
+
+	/* check for clipping */
+	if (value < fluid->adptv_start)
+		value = fluid->adptv_start;
+
+	fluid->adptv_end = value;
+}
+
 static int rna_ParticleSystem_multiple_caches_get(PointerRNA *ptr)
 {
 	ParticleSystem *psys = (ParticleSystem *)ptr->data;
@@ -1437,12 +1463,6 @@ static void rna_def_particle(BlenderRNA *brna)
 		{0, NULL, 0, NULL, NULL}
 	};
 
-	static EnumPropertyItem split_items[] = {
-		/*{PARS_KILLED, "KILLED", 0, "Killed", ""}, */
-		{PARS_SPLIT, "SPLIT", 0, "Split", ""},
-		{PARS_UNSPLIT, "UNSPLIT", 0, "Unsplit", ""},
-		{0, NULL, 0, NULL, NULL}
-	};
 	srna = RNA_def_struct(brna, "Particle", NULL);
 	RNA_def_struct_sdna(srna, "ParticleData");
 	RNA_def_struct_ui_text(srna, "Particle", "Particle in a particle system");
@@ -1543,11 +1563,6 @@ static void rna_def_particle(BlenderRNA *brna)
 	RNA_def_property_enum_sdna(prop, NULL, "alive");
 	RNA_def_property_enum_items(prop, alive_items);
 	RNA_def_property_ui_text(prop, "Alive State", "");
-
-	prop = RNA_def_property(srna, "split_state", PROP_ENUM, PROP_NONE);
-	RNA_def_property_enum_sdna(prop, NULL, "split");
-	RNA_def_property_enum_items(prop, split_items);
-	RNA_def_property_ui_text(prop, "Split State", "");
 
 /*	short rt2; */
 
@@ -1657,6 +1672,29 @@ static void rna_def_fluid_settings(BlenderRNA *brna)
 	RNA_def_property_range(prop, 0.0f, 100.0f);
 	RNA_def_property_ui_text(prop, "Spring Frames",
 	                         "Create springs for this number of frames since particles birth (0 is always)");
+	RNA_def_property_update(prop, 0, "rna_Particle_reset");
+
+	prop = RNA_def_property(srna, "adptv_frame_start", PROP_FLOAT, PROP_NONE);
+	RNA_def_property_float_sdna(prop, NULL, "adptv_start"); /*optional if prop names are the same */
+	RNA_def_property_range(prop, MINAFRAMEF, MAXFRAMEF);
+	RNA_def_property_clear_flag(prop, PROP_ANIMATABLE);
+	RNA_def_property_float_funcs(prop, NULL, "rna_SPHFluidSettings_adptv_start_set", NULL);
+	RNA_def_property_ui_text(prop, "Adaptive Start Frame", "Frame number to turn adaptive resolution on");
+	RNA_def_property_update(prop, 0, "rna_Particle_reset");
+
+	prop = RNA_def_property(srna, "adptv_frame_end", PROP_FLOAT, PROP_NONE);
+	RNA_def_property_float_sdna(prop, NULL, "adptv_end");
+	RNA_def_property_range(prop, MINAFRAMEF, MAXFRAMEF);
+	RNA_def_property_clear_flag(prop, PROP_ANIMATABLE);
+	RNA_def_property_float_funcs(prop, NULL, "rna_SPHFluidSettings_end_set", NULL);
+	RNA_def_property_ui_text(prop, "Adaptive End Frame", "Frame number to turn adaptive resolution off");
+	RNA_def_property_update(prop, 0, "rna_Particle_reset");
+
+	prop = RNA_def_property(srna, "adptv_scale", PROP_FLOAT, PROP_NONE);
+	RNA_def_property_float_sdna(prop, NULL, "adptv_scale");
+	RNA_def_property_range(prop, 0.0f, 1000.0f);
+	RNA_def_property_ui_range(prop, 0.0f, 10.0f, 1, 3);
+	RNA_def_property_ui_text(prop, "Scale factor", "Scale geometry of splitting patterns");
 	RNA_def_property_update(prop, 0, "rna_Particle_reset");
 
 	/* Viscosity */

@@ -66,7 +66,6 @@ static SPHRefiner *new_sph_refiner(Scene *scene, Object *ob, PartRefine *pr)
 	refiner->scene = scene;
 	refiner->ob = ob;
 	refiner->pr = pr;
-	refiner->pr->min_mass = 1.f / (pow(refiner->pr->split_ratio, refiner->pr->nsplits));
 	refiner->radius = pr->radius;
 	copy_v3_v3(refiner->co, ob->loc);
 	refiner->surmd = (SurfaceModifierData *)modifiers_findByType(refiner->ob, eModifierType_Surface);
@@ -74,7 +73,9 @@ static SPHRefiner *new_sph_refiner(Scene *scene, Object *ob, PartRefine *pr)
 	/* Need to account for non-uniform mass distribution of
 	 * 9:1 splitting method */
 	if (refiner->pr->split_ratio == SPLIT9)
-		refiner->pr->min_mass = 2.f / (pow(refiner->pr->split_ratio, refiner->pr->nsplits));
+		refiner->pr->min_mass = 2.f / (refiner->pr->split_ratio + 1.f);
+	else
+		refiner->pr->min_mass = 1.f / (pow(refiner->pr->split_ratio, refiner->pr->nsplits));
 
 	return refiner;
 }

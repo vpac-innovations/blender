@@ -616,12 +616,6 @@ class PARTICLE_PT_physics(ParticleButtonsPanel, Panel):
                 col.prop(fluid, "linear_viscosity", text="Viscosity")
                 col.prop(fluid, "buoyancy", text="Buoyancy", slider=True)
 
-                if fluid.solver == 'CLASSICAL':
-                    sub = col.row()
-                    sub.prop(fluid, "use_adptv_resolution")
-                    if fluid.use_adptv_resolution:
-                        layout.label(text="See physics tab to add refiner modifiers to objects.")
-
                 col = split.column()
                 col.label(text="Advanced:")
 
@@ -650,6 +644,19 @@ class PARTICLE_PT_physics(ParticleButtonsPanel, Panel):
                     spacing = pow(particle_volume, 1.0 / 3.0)
                     sub = col.row()
                     sub.label(text="Spacing: %g" % spacing)
+
+                    layout.prop(fluid, "use_adptv_resolution")
+
+                    if fluid.use_adptv_resolution:
+                       layout.label(text="See physics tab to add refiner modifiers to objects.")
+                       layout.label(text="Adaptive resolution settings:")
+                       split = layout.split()
+                       col = split.column()
+                       col.prop(fluid, "adptv_frame_start", text="Adptv start")
+                       col.prop(fluid, "adptv_frame_end", text="Adptv end")
+                       col = split.column()
+                       sub = col.row()
+                       col.prop(fluid, "adptv_scale", text="Scale factor")
 
                 elif fluid.solver == 'DDR':
                     split = layout.split()

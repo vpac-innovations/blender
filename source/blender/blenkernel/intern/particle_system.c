@@ -1310,7 +1310,7 @@ void integrate_particle(ParticleSettings *part, ParticleData *pa, float dtime, f
 
 #undef ZERO_F43
 
-	if(pa->adptv)
+	if (pa->adptv)
 		pa_mass *= pa->sphmassfac;
 
 	copy_v3_v3(oldpos, pa->state.co);
@@ -2909,6 +2909,8 @@ static void dynamics_step(ParticleSimulationData *sim, float cfra)
 				  /* ADAPTIVE RESOLUTION */
 				  /* Adaptive resolution method based on the work of Feldman and
 				  * Bonet 2007 and Vacondio et al. 2013. */
+				  float start = part->fluid->adptv_start;
+				  float end = part->fluid->adptv_end;
 
 				  /* Initialize storage for dead particle re-use */
 				  if(!psys->deadpars){
@@ -2918,7 +2920,7 @@ static void dynamics_step(ParticleSimulationData *sim, float cfra)
 				  /* Update/initialize refiner BVH trees */
 				  BPH_sph_adptv_res_init(sim, psys);
 
-				  if (cfra > 809 && cfra < 50000){
+				  if (cfra > start && cfra < end){
 					  BPH_sph_split_particle(sim, cfra);
 					  BPH_sph_unsplit_particle(sim, cfra);
 				  }
@@ -3360,6 +3362,10 @@ static void fluid_default_settings(ParticleSettings *part)
 	fluid->buoyancy = 0.f;
 	fluid->radius = 1.f;
 	fluid->flag |= SPH_FAC_REPULSION|SPH_FAC_DENSITY|SPH_FAC_RADIUS|SPH_FAC_VISCOSITY|SPH_FAC_REST_LENGTH|SPH_FAC_ADPTV_RES;
+	fluid->adptv_start = 1.f;
+	fluid->adptv_end = MAXFRAMEF;
+	fluid->adptv_scale = 1.f;
+
 }
 
 static void psys_prepare_physics(ParticleSimulationData *sim)
