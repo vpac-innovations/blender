@@ -29,6 +29,8 @@
 #include "MEM_guardedalloc.h"
 
 #include "DNA_listBase.h"
+#include "DNA_mesh_types.h"
+#include "DNA_meshdata_types.h"
 #include "DNA_object_refiner.h"
 #include "DNA_object_types.h"
 #include "DNA_particle_types.h"
@@ -37,6 +39,9 @@
 #include "BLI_math.h"
 #include "BLI_listbase.h"
 
+#include "BKE_bvhutils.h"
+#include "BKE_cdderivedmesh.h"
+#include "BKE_editmesh.h"
 #include "BKE_modifier.h"
 #include "BKE_refine.h"
 
@@ -57,6 +62,34 @@ PartRefine *object_add_refiner(int type)
 	pr->falloff_flag = NO_FALLOFF;
 
 	return pr;
+}
+
+void add_refiner_custom_data_layers(Object *ob, int overwrite)
+{
+	PartRefine *pr = ob->pr;
+	MFloatProperty *fp;
+	CustomDataLayer *cdl;
+	Mesh *me = ob->data;
+	int index;
+	int i;
+
+	if (pr->refine_type == REFINE_FACES) {
+		/* Retrieve existing custom data layer or create if not found */
+		index = CustomData_get_named_layer_index(&me->pdata, CD_PROP_FLT, "radius");
+		if (index < 0) {
+			CustomData_add_layer_named(&me->pdata, CD_PROP_FLT, CD_DEFAULT, NULL, me->totpoly, "radius");
+			index = CustomData_get_named_layer_index(&me->pdata, CD_PROP_FLT, "radius");
+			overwrite = 1;
+		}
+
+		if (overwrite) {
+			cdl = &me->pdata.layers[index];
+			fp = ((MFloatProperty *)cdl->data);
+			for (i = 0; i < me->totpoly; i++) {
+				fp[i].f = ob->pr->radius;
+			}
+		}
+	}
 }
 
 static SPHRefiner *new_sph_refiner(Scene *scene, Object *ob, PartRefine *pr)
@@ -87,6 +120,12 @@ static void add_object_to_refiners(ListBase **refiners, Scene *scene, Object *ob
 	if (ob == ob_src)
 		return;
 
+	if (ob->type == OB_MESH) {
+	/* Add refiner properties to a custom data layer for
+	 * per face/edge/vert customisation. */
+		add_refiner_custom_data_layers(ob, 0);
+	}
+
 	/* derivedFinal may have been released on another thread,
 	 * hold here until it exists.
 	 * TODO: Find a better solution. */
@@ -102,6 +141,48 @@ static void add_object_to_refiners(ListBase **refiners, Scene *scene, Object *ob
 	invert_m4_m4(ob->imat, ob->obmat);
 
 	BLI_addtail(*refiners, ref);
+}
+
+static int dm_tessface_to_poly_index(DerivedMesh *dm, int tessface_index)
+{
+	if (tessface_index != ORIGINDEX_NONE) {
+		/* double lookup */
+		const int *index_mf_to_mpoly;
+		if ((index_mf_to_mpoly = dm->getTessFaceDataArray(dm, CD_ORIGINDEX))) {
+			const int *index_mp_to_orig = dm->getPolyDataArray(dm, CD_ORIGINDEX);
+			return DM_origindex_mface_mpoly(index_mf_to_mpoly, index_mp_to_orig, tessface_index);
+		}
+	}
+
+	return ORIGINDEX_NONE;
+}
+
+int closest_point_on_refiner(Object *ob, SurfaceModifierData *surmd, const float co[3], float surface_co[3], float surface_nor[3], int *mp_index)
+{
+	BVHTreeNearest nearest;
+
+	nearest.index = -1;
+	nearest.dist_sq = FLT_MAX;
+
+	BLI_bvhtree_find_nearest(surmd->bvhtree->tree, co, &nearest, surmd->bvhtree->nearest_callback, surmd->bvhtree);
+
+	if (nearest.index != -1) {
+	/* derivedFinal may have been released on another thread,
+	 * hold here until it exists.
+	 * TODO: Find a better solution. */
+		while(ob->type == OB_MESH && !ob->derivedFinal){
+		}
+
+		*mp_index = dm_tessface_to_poly_index(ob->derivedFinal, nearest.index);
+		copy_v3_v3(surface_co, nearest.co);
+
+		if (surface_nor) {
+			copy_v3_v3(surface_nor, nearest.no);
+		}
+		return 1;
+	}
+
+	return 0;
 }
 
 void prEndRefiners(ListBase **refiners)

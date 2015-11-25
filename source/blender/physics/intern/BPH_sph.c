@@ -35,6 +35,7 @@
 #include "MEM_guardedalloc.h"
 
 #include "DNA_particle_types.h"
+#include "DNA_mesh_types.h"
 #include "DNA_object_types.h"
 #include "DNA_object_refiner.h"
 #include "DNA_scene_types.h"
@@ -755,50 +756,14 @@ static int collider_test(ParticleSimulationData *sim, ParticleData *pa, BVHTreeR
 	return hit->index >= 0;
 }
 
-static int split_through_wall_test(ParticleSimulationData *sim, ParticleData *pa, BVHTreeRayHit *hit)
-{
-	ColliderCache *coll;
-	ListBase *colliders = sim->colliders;
-	BVHTreeFromMesh treeData = {NULL};
-	Object *current;
-	float ray_start[3], ray_end[3], ray_dir[3], old_dist;
-
-	if(BLI_listbase_is_empty(colliders))
-		return 0;
-
-	copy_v3_v3(ray_start, pa->prev_state.co);
-	copy_v3_v3(ray_end, pa->state.co);
-
-	sub_v3_v3v3(ray_dir, ray_end, ray_start);
-	hit->index = -1;
-	hit->dist = len_v3(ray_dir);
-
-	/* Iterate over colliders and check for intersect */
-	for(coll=colliders->first; coll; coll=coll->next){
-		current = coll->ob;
-		old_dist = hit->dist;
-
-		bvhtree_from_mesh_faces(&treeData, current->derivedFinal, 0.0f, 4, 6);
-
-		/* Ray cast. */
-		BLI_bvhtree_ray_cast(treeData.tree, ray_start, ray_dir, pa->size, hit, treeData.raycast_callback, &treeData);
-
-		/* Throw out new hit distance if previous one was shorter. */
-		if(old_dist < hit->dist)
-			hit->dist = old_dist;
-
-		free_bvhtree_from_mesh(&treeData);
-	}
-	return hit->index >= 0;
-}
-
 static void sphclassical_check_refiners(ListBase *refiners, RefinerData* rfd, ParticleData *pa, float offset)
 {
 	SPHRefiner *sref;
-	float vec[3], dist, upper_bound, lower_bound, k, A, eps, sr, ns, x0, xN;
+	float vec[3], radius, dist, upper_bound, lower_bound, k, A, eps, sr, ns, x0, xN;
 	int ret = 0, num_verts, p;
 
 	if(refiners) for(sref = refiners->first; sref; sref=sref->next) {
+		radius = sref->radius;
 		switch(sref->pr->refine_type) {
 			case REFINE_POINT:
 			{
@@ -808,11 +773,23 @@ static void sphclassical_check_refiners(ListBase *refiners, RefinerData* rfd, Pa
 			case REFINE_FACES:
 			{
 				/* Mesh refiner, find minimum distance from particle to face. */
+				CustomDataLayer *cdl;
+				MFloatProperty *fp = NULL;
+				Mesh *me = sref->ob->data;
+				int index, mpoly_index;
+
 				/* Ensure inverse obmat up-to-date. Convert to refiner local co-ordinates. */
 				invert_m4_m4(sref->ob->imat, sref->ob->obmat);
 				mul_v3_m4v3(vec, sref->ob->imat, pa->state.co);
 
-				ret = closest_point_on_surface(sref->surmd, vec, sref->co, sref->nor, NULL);
+				ret = closest_point_on_refiner(sref->ob, sref->surmd, vec, sref->co, sref->nor, &mpoly_index);
+
+				/* Retrieve refiner radius from custom data layer */
+				index = CustomData_get_named_layer_index(&me->pdata, CD_PROP_FLT, "radius");
+				cdl = &me->pdata.layers[index];
+				fp = ((MFloatProperty *)cdl->data + mpoly_index);
+
+				radius = fp->f;
 
 				/* Convert nearest point from refiner local co-oridnates to global co-ordinates. */
 				mul_m4_v3(sref->ob->obmat, sref->co);
@@ -878,7 +855,7 @@ static void sphclassical_check_refiners(ListBase *refiners, RefinerData* rfd, Pa
 				}
 			}
 			else{
-				if(dist < sref->radius + offset){
+				if(dist < radius + offset){
 					if (sref->pr->min_mass + eps < pa->sphmaxmass || sref->pr->min_mass - eps < pa->sphminmass) {
 						pa->sphmaxmass = sref->pr->min_mass + eps < pa->sphmaxmass ? sref->pr->min_mass + eps:pa->sphmaxmass;
 						pa->sphminmass = sref->pr->min_mass - eps < pa->sphminmass ? sref->pr->min_mass - eps:pa->sphminmass;

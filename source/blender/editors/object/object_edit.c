@@ -1185,6 +1185,15 @@ void ED_object_check_refiner_modifiers(Main *bmain, Scene *scene, Object *object
 	}
 }
 
+static void object_remove_refiner_custom_data (Object *ob)
+{
+	Mesh *me = ob->data;
+	int index = CustomData_get_named_layer_index(&me->pdata, CD_PROP_FLT, "radius");
+
+	if (index > -1)
+		CustomData_free_layer(&me->pdata, CD_PROP_FLT, me->totpoly, index);
+}
+
 static int refiner_toggle_exec(bContext *C, wmOperator *UNUSED(op))
 {
 	Object *ob = CTX_data_active_object(C);
@@ -1201,8 +1210,11 @@ static int refiner_toggle_exec(bContext *C, wmOperator *UNUSED(op))
 		else
 			ob->pr->refine_type = REFINE_POINTS;
 	}
-	else
+	else {
 		ob->pr->refine_type = 0;
+		if (ELEM(ob->type, OB_MESH))
+			object_remove_refiner_custom_data(ob);
+	}
 
 	ED_object_check_refiner_modifiers(CTX_data_main(C), CTX_data_scene(C), ob);
 	WM_event_add_notifier(C, NC_OBJECT | ND_DRAW, ob);

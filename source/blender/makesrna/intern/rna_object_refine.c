@@ -72,10 +72,11 @@ static EnumPropertyItem refiner_split_items[] = {
 #include "DNA_texture_types.h"
 
 #include "BKE_context.h"
+#include "BKE_depsgraph.h"
 #include "BKE_DerivedMesh.h"
 #include "BKE_modifier.h"
 #include "BKE_pointcache.h"
-#include "BKE_depsgraph.h"
+#include "BKE_refine.h"
 
 #include "ED_object.h"
 
@@ -140,24 +141,29 @@ static EnumPropertyItem *rna_Refiner_type_itemf(bContext *UNUSED(C), PointerRNA 
 	return refiner_type_items;
 }
 
-static void rna_RefinerSettings_shape_update(Main *bmain, Scene *scene, PointerRNA *ptr)
+static void rna_RefinerSettings_type_update(Main *bmain, Scene *scene, PointerRNA *ptr)
 {
 	if (!particle_id_check(ptr)) {
 		Object *ob = (Object *)ptr->id.data;
+
+		if (ob->type == OB_MESH && ob->pr->refine_type == REFINE_FACES)
+			add_refiner_custom_data_layers(ob, 1);
+
 		ED_object_check_refiner_modifiers(bmain, scene, ob);
 		WM_main_add_notifier(NC_OBJECT | ND_DRAW, ob);
 		WM_main_add_notifier(NC_OBJECT | ND_MODIFIER, ob);
 	}
 }
 
-static void rna_RefinerSettings_type_update(Main *bmain, Scene *scene, PointerRNA *ptr)
+static void rna_RefinerSettings_radius_update(Main *UNUSED(bmain), Scene *UNUSED(scene), PointerRNA *ptr)
 {
-	if (!particle_id_check(ptr)) {
-		Object *ob = (Object *)ptr->id.data;
-		ED_object_check_refiner_modifiers(bmain, scene, ob);
-		WM_main_add_notifier(NC_OBJECT | ND_DRAW, ob);
-		WM_main_add_notifier(NC_OBJECT | ND_MODIFIER, ob);
-	}
+	Object *ob = (Object *)ptr->id.data;
+
+	if (ob->type == OB_MESH)
+		add_refiner_custom_data_layers(ob, 1);
+
+	DAG_id_tag_update(&ob->id, OB_RECALC_OB);
+	WM_main_add_notifier(NC_OBJECT | ND_DRAW, ob);
 }
 
 static void rna_RefinerSettings_ratio_update(Main *bmain, Scene *scene, PointerRNA *ptr)
@@ -201,7 +207,7 @@ static void rna_RefinerSettings_dependency_update(Main *bmain, Scene *scene, Poi
 	else {
 		Object *ob = (Object *)ptr->id.data;
 
-		rna_RefinerSettings_shape_update(bmain, scene, ptr);
+		rna_RefinerSettings_type_update(bmain, scene, ptr);
 
 		DAG_relations_tag_update(bmain);
 
@@ -266,7 +272,7 @@ static void rna_def_refiner(BlenderRNA *brna)
 	RNA_def_property_range(prop, 0.0f, FLT_MAX);
 	RNA_def_property_ui_range(prop, 0.0f, FLT_MAX, 1, 4);
 	RNA_def_property_ui_text(prop, "Radius", "Radius within which adaptive resolution is active");
-	RNA_def_property_update(prop, 0, "rna_RefinerSettings_update");
+	RNA_def_property_update(prop, 0, "rna_RefinerSettings_radius_update");
 
 	prop = RNA_def_property(srna, "minimum_mass", PROP_FLOAT, PROP_NONE);
 	RNA_def_property_float_sdna(prop, NULL, "min_mass");
