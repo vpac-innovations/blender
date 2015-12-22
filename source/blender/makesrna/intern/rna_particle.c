@@ -1690,6 +1690,14 @@ static void rna_def_fluid_settings(BlenderRNA *brna)
 	RNA_def_property_ui_text(prop, "Adaptive End Frame", "Frame number to turn adaptive resolution off");
 	RNA_def_property_update(prop, 0, "rna_Particle_reset");
 
+	prop = RNA_def_property(srna, "adptv_zmax", PROP_FLOAT, PROP_NONE);
+	RNA_def_property_float_sdna(prop, NULL, "adptv_zmax"); /*optional if prop names are the same */
+	RNA_def_property_ui_text(prop, "Adaptive zmax", "Particles must be below zmax to apply adaptive resolution");
+
+	prop = RNA_def_property(srna, "adptv_zmin", PROP_FLOAT, PROP_NONE);
+	RNA_def_property_float_sdna(prop, NULL, "adptv_zmin"); /*optional if prop names are the same */
+	RNA_def_property_ui_text(prop, "Adaptive zmax", "Particles must be above zmin to apply adaptive resolution");
+
 	prop = RNA_def_property(srna, "adptv_scale", PROP_FLOAT, PROP_NONE);
 	RNA_def_property_float_sdna(prop, NULL, "adptv_scale");
 	RNA_def_property_range(prop, 0.0f, 1000.0f);

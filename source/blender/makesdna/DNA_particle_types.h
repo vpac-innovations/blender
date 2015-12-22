@@ -139,7 +139,7 @@ typedef struct SPHFluidSettings {
 	float viscosity_omega, viscosity_beta;
 	float stiffness_k, stiffness_knear, rest_density;
 	float buoyancy;
-	float adptv_start, adptv_end, adptv_scale;
+	float adptv_start, adptv_end, adptv_scale, adptv_zmax, adptv_zmin;
 	int flag, spring_frames;
 	short solver;
 	short pad[3];

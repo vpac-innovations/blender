@@ -3365,6 +3365,8 @@ static void fluid_default_settings(ParticleSettings *part)
 	fluid->adptv_start = 1.f;
 	fluid->adptv_end = MAXFRAMEF;
 	fluid->adptv_scale = 1.f;
+	fluid->adptv_zmax = FLT_MAX;
+	fluid->adptv_zmin = -FLT_MAX;
 
 }
 

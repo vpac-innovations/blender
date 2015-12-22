@@ -911,9 +911,12 @@ void BPH_sph_unsplit_particle(ParticleSimulationData *sim, float cfra)
 {
 	SPHData sphdata;
 	ParticleSystem *psys = sim->psys;
+	SPHFluidSettings *fluid = psys->part->fluid;
 	ParticleData *npa;
 	RefinerData rfd;
 	SPHRangeData pfr;
+	float zmax = fluid->adptv_zmax;
+	float zmin = fluid->adptv_zmin;
 	float qfac = qfac = 21.0f / (256.f * (float)M_PI);
 	float interaction_radius = psys->part->fluid->radius;
 	float h = interaction_radius * 0.5f;
@@ -929,6 +932,10 @@ void BPH_sph_unsplit_particle(ParticleSimulationData *sim, float cfra)
 		if((pa->alive != PARS_ALIVE || pa->adptv == PARS_UNADAPTABLE)){
 			continue;
 		}
+
+		/* Check particle is within global refinement limits */
+		if (pa->state.co[2] > zmax || pa->state.co[2] < zmin)
+			continue;
 
 		/* Update particle mass limits from refiners */
 		sphclassical_check_refiners(psys->refiners, &rfd, pa, interaction_radius);
@@ -1561,15 +1568,22 @@ static void sph_split9(ParticleSimulationData *sim, RefinerData *rfd, int index,
 
 void BPH_sph_split_particle(ParticleSimulationData *sim, float cfra){
 	ParticleSystem *psys = sim->psys;
+	SPHFluidSettings *fluid = psys->part->fluid;
 	RefinerData rfd;
+	float zmax = fluid->adptv_zmax;
+	float zmin = fluid->adptv_zmin;
 	PARTICLE_P;
 
 	LOOP_DYNAMIC_PARTICLES {
 		if(pa->alive == PARS_ALIVE && pa->adptv == PARS_ADAPTABLE){
+			/* Check particle is within global refinement limits */
+			if (pa->state.co[2] > zmax || pa->state.co[2] < zmin)
+				continue;
+
 			/* Update particle mass limits from refiners. */
 			sphclassical_check_refiners(psys->refiners, &rfd, pa, 0.0f);
 
-			if(pa->sphmassfac < pa->sphmaxmass)
+			if (pa->sphmassfac < pa->sphmaxmass)
 				continue;
 
 			switch(rfd.ratio){
